@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# user
+.playwright-mcp/*
+.sisyphus/*
+*.csv
+AGENTS.md
