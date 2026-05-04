@@ -944,7 +944,7 @@
       // Pre-set container height before init to ensure correct canvas size
       if (plotType === 'time-series' && timeSeriesMode === 'separate') {
         const n = Math.min(selectedVars.length, 10);
-        const totalHeight = 8 + n * (200 + 20) + (n - 1) * 40 + 24 + 44 + 36;
+        const totalHeight = 8 + n * (200 + 20) + (n - 1) * 40 + 8 + 44 + 36;
         container.style.height = totalHeight + 'px';
       } else {
         container.style.height = '100%';
@@ -1036,10 +1036,10 @@
       const rowHeight = 200; // px, fixed height per subplot
       const gap = 20; // px, gap between subplots (increased)
       const topPad = 8; // px
-      const xAxisHeight = 44; // px for shared bottom time axis (increased for label + tick space)
-      const dataZoomHeight = 36; // px for dataZoom slider at bottom
-      const labelHeight = 20; // px for variable name label below each subplot
-      const bottomGap = 24; // px, extra space between last label and bottom axis
+      const xAxisHeight = 10; // px for shared bottom time axis (increased for label + tick space)
+      const dataZoomHeight = 50; // px for dataZoom slider at bottom
+      const labelHeight = 10; // px for variable name label below each subplot
+      const bottomGap = 8; // px, small space between last label and bottom axis
       const totalHeight = topPad + n * (rowHeight + labelHeight) + (n - 1) * gap + bottomGap + xAxisHeight + dataZoomHeight;
 
       const grids = [];
