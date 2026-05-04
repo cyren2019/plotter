@@ -944,7 +944,7 @@
       // Pre-set container height before init to ensure correct canvas size
       if (plotType === 'time-series' && timeSeriesMode === 'separate') {
         const n = Math.min(selectedVars.length, 10);
-        const totalHeight = 8 + n * (200 + 20) + (n - 1) * 40 + 36;
+        const totalHeight = 8 + n * (200 + 20) + (n - 1) * 40 + 24 + 44 + 36;
         container.style.height = totalHeight + 'px';
       } else {
         container.style.height = '100%';
@@ -1031,14 +1031,16 @@
         };
       }
 
-      // Separate mode: one subplot per variable, independent Y-axis
+       // Separate mode: one subplot per variable, independent Y-axis
       const n = varsToPlot.length;
       const rowHeight = 200; // px, fixed height per subplot
-      const gap = 40; // px, gap between subplots (increased)
+      const gap = 20; // px, gap between subplots (increased)
       const topPad = 8; // px
-      const xAxisHeight = 36; // px for shared bottom time axis
+      const xAxisHeight = 44; // px for shared bottom time axis (increased for label + tick space)
+      const dataZoomHeight = 36; // px for dataZoom slider at bottom
       const labelHeight = 20; // px for variable name label below each subplot
-      const totalHeight = topPad + n * (rowHeight + labelHeight) + (n - 1) * gap + xAxisHeight;
+      const bottomGap = 24; // px, extra space between last label and bottom axis
+      const totalHeight = topPad + n * (rowHeight + labelHeight) + (n - 1) * gap + bottomGap + xAxisHeight + dataZoomHeight;
 
       const grids = [];
       const graphics = [];
@@ -1139,7 +1141,7 @@
       });
 
       // Shared bottom grid for time axis labels
-      const bottomGridTop = topPad + n * (rowHeight + labelHeight) + (n - 1) * gap;
+      const bottomGridTop = topPad + n * (rowHeight + labelHeight) + (n - 1) * gap + bottomGap;
       grids.push({
         top: bottomGridTop,
         left: gridLeft,
@@ -1177,6 +1179,9 @@
         max: 1,
       });
 
+      // All X axis indices including the shared bottom axis
+      const allXAxisIndices = Array.from({ length: n + 1 }, (_, idx) => idx);
+
       return {
         backgroundColor: isDark ? '#111827' : '#ffffff',
         tooltip: {
@@ -1190,6 +1195,27 @@
         yAxis: yAxes,
         series,
         animation: false,
+        dataZoom: [
+          {
+            type: 'slider',
+            xAxisIndex: allXAxisIndices,
+            start: 0,
+            end: 100,
+            bottom: 0,
+            borderColor: isDark ? '#374151' : '#ddd',
+            fillerColor: isDark ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.1)',
+            handleStyle: { color: isDark ? '#9ca3af' : '#999' },
+            textStyle: { color: isDark ? '#d1d5db' : '#333' },
+          },
+          {
+            type: 'inside',
+            xAxisIndex: allXAxisIndices,
+            start: 0,
+            end: 100,
+            zoomOnMouseWheel: true,
+            moveOnMouseMove: true,
+          },
+        ],
       };
     }
 
