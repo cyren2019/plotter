@@ -1,0 +1,53 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - generic [ref=e4]:
+      - img [ref=e5]
+      - text: 数据绘图工具
+    - generic [ref=e7]:
+      - generic [ref=e32]: test-data.csv
+      - button "明亮" [active] [ref=e95] [cursor=pointer]:
+        - img [ref=e9]
+        - generic [ref=e15]: 明亮
+      - button "导入" [ref=e16] [cursor=pointer]:
+        - img [ref=e17]
+        - text: 导入
+  - main [ref=e20]:
+    - complementary [ref=e33]:
+      - generic [ref=e34]:
+        - generic [ref=e35]:
+          - img [ref=e36]
+          - generic [ref=e38]: 变量选择
+        - generic [ref=e39]:
+          - img [ref=e40]
+          - textbox "搜索变量…" [ref=e43]
+        - generic [ref=e44]:
+          - button "全选" [ref=e45] [cursor=pointer]
+          - button "取消" [ref=e46] [cursor=pointer]
+        - generic [ref=e47]:
+          - generic [ref=e48]: "3"
+          - generic [ref=e49]: / 4 个变量
+          - generic [ref=e50]: （最多 10 个）
+      - generic [ref=e51]:
+        - generic [ref=e52]:
+          - img [ref=e53]
+          - generic [ref=e56]: time
+          - generic [ref=e57]: 时间轴
+        - generic [ref=e58] [cursor=pointer]:
+          - img [ref=e60]
+          - generic "temperature" [ref=e62]
+        - generic [ref=e64] [cursor=pointer]:
+          - img [ref=e66]
+          - generic "pressure" [ref=e68]
+        - generic [ref=e70] [cursor=pointer]:
+          - img [ref=e72]
+          - generic "humidity" [ref=e74]
+        - generic "voltage" [ref=e78] [cursor=pointer]
+    - generic [ref=e79]:
+      - navigation [ref=e80]:
+        - button "时序图" [ref=e81] [cursor=pointer]
+        - button "XY图" [ref=e82] [cursor=pointer]
+        - button "XYZ图" [ref=e83] [cursor=pointer]
+        - generic [ref=e84]:
+          - button "合并" [ref=e85] [cursor=pointer]
+          - button "分图" [ref=e86] [cursor=pointer]
+      - generic [ref=e88]: 时序图

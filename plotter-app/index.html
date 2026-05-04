@@ -650,7 +650,10 @@
         themeIcon.innerHTML = '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
       }
     }
-    themeToggle.addEventListener('click', () => applyTheme(!isDark));
+    themeToggle.addEventListener('click', () => {
+      applyTheme(!isDark);
+      if (data) renderChart();
+    });
 
     // ===================== Error Handling =====================
     function showError(msg) {
@@ -957,7 +960,11 @@
       }
 
       if (option) {
-        chartInstance.setOption(option, true);
+        try {
+          chartInstance.setOption(option, true);
+        } catch (e) {
+          console.warn('ECharts render warning:', e.message);
+        }
         requestAnimationFrame(() => chartInstance && chartInstance.resize());
       }
 
@@ -996,8 +1003,9 @@
         }));
 
         return {
+          backgroundColor: isDark ? '#111827' : 'transparent',
           tooltip: { trigger: 'axis' },
-          legend: { type: 'scroll', bottom: 0, textStyle: { fontSize: 12 } },
+          legend: { type: 'scroll', bottom: 0, textStyle: { fontSize: 12, color: isDark ? '#d1d5db' : '#333' } },
           grid: {
             left: '3%', right: '4%',
             bottom: varsToPlot.length > 5 ? '15%' : '10%',
@@ -1005,16 +1013,19 @@
           },
           xAxis: {
             type: 'category', data: timeLabels,
-            axisLabel: { rotate: timeLabels.length > 20 ? 45 : 0, fontSize: 11 },
+            axisLabel: { rotate: timeLabels.length > 20 ? 45 : 0, fontSize: 11, color: isDark ? '#d1d5db' : '#333' },
+            axisLine: { lineStyle: { color: isDark ? '#9ca3af' : '#999' } },
           },
           yAxis: {
             type: 'value',
             name: varsToPlot.length === 1 ? varsToPlot[0] : '',
-            nameTextStyle: { fontSize: 11 },
+            nameTextStyle: { fontSize: 11, color: isDark ? '#d1d5db' : '#333' },
+            axisLabel: { color: isDark ? '#d1d5db' : '#333' },
+            splitLine: { lineStyle: { color: isDark ? '#374151' : '#eee' } },
           },
           series,
           dataZoom: [
-            { type: 'slider', start: 0, end: 100, bottom: varsToPlot.length > 5 ? '8%' : '4%' },
+            { type: 'slider', start: 0, end: 100, bottom: varsToPlot.length > 5 ? '8%' : '4%', borderColor: isDark ? '#374151' : '#ddd', fillerColor: isDark ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.1)', handleStyle: { color: isDark ? '#9ca3af' : '#999' }, textStyle: { color: isDark ? '#d1d5db' : '#333' } },
             { type: 'inside' },
           ],
         };
@@ -1025,15 +1036,26 @@
       const rowHeight = 200; // px, fixed height per subplot
       const gap = 40; // px, gap between subplots (increased)
       const topPad = 8; // px
-      const bottomPad = 36; // px for dataZoom slider
+      const xAxisHeight = 36; // px for shared bottom time axis
       const labelHeight = 20; // px for variable name label below each subplot
-      const totalHeight = topPad + n * (rowHeight + labelHeight) + (n - 1) * gap + bottomPad;
+      const totalHeight = topPad + n * (rowHeight + labelHeight) + (n - 1) * gap + xAxisHeight;
 
       const grids = [];
       const graphics = [];
       const xAxes = [];
       const yAxes = [];
       const series = [];
+
+      const axisColor = isDark ? '#9ca3af' : '#999';
+      const labelColor = isDark ? '#d1d5db' : '#666';
+      const yLabelColor = isDark ? '#d1d5db' : '#333';
+      const splitLineColor = isDark ? '#374151' : '#ccc';
+      const gridBg = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(128,128,128,0.05)';
+      const gridBorder = isDark ? '#374151' : '#e5e7eb';
+
+      // Fixed left margin for strict alignment across all subplots
+      const gridLeft = 60;
+      const gridRight = 30;
 
       varsToPlot.forEach((variable, i) => {
         const top = topPad + i * (rowHeight + labelHeight + gap);
@@ -1056,40 +1078,35 @@
 
         grids.push({
           top: top,
-          left: 60,
-          right: 30,
+          left: gridLeft,
+          right: gridRight,
           height: rowHeight,
-          containLabel: true,
+          containLabel: false,
           show: true,
-          borderColor: '#999',
+          borderColor: gridBorder,
           borderWidth: 1,
-          backgroundColor: 'rgba(128,128,128,0.05)',
+          backgroundColor: gridBg,
         });
 
         xAxes.push({
           type: 'category',
           data: timeLabels,
           gridIndex: i,
-          axisLine: { show: i === n - 1, lineStyle: { color: '#999' } },
-          axisTick: { show: i === n - 1, lineStyle: { color: '#999' } },
-          axisLabel: {
-            show: i === n - 1,
-            color: '#666',
-            rotate: timeLabels.length > 20 ? 45 : 0,
-            fontSize: 10,
-          },
+          axisLine: { show: false },
+          axisTick: { show: false },
+          axisLabel: { show: false },
           axisPointer: { show: true, type: 'line', lineStyle: { color: '#4f46e5', width: 2 } },
           position: 'bottom',
         });
 
-        // Variable name label inside subplot (top center)
+        // Variable name label below the subplot
         graphics.push({
           type: 'text',
           left: 'center',
-          top: top + 6,
+          top: top + rowHeight + 4,
           style: {
             text: variable,
-            fill: '#4f46e5',
+            fill: isDark ? '#f9fafb' : '#4f46e5',
             font: 'bold 12px sans-serif',
           },
         });
@@ -1098,10 +1115,10 @@
           type: 'value',
           gridIndex: i,
           show: true,
-          axisLine: { show: true, lineStyle: { color: '#999' } },
-          axisTick: { show: true, lineStyle: { color: '#999' } },
-          axisLabel: { show: true, color: '#333', fontSize: 10, formatter: v => Number(v).toFixed(1) },
-          splitLine: { show: true, lineStyle: { color: '#ccc', type: 'dashed' } },
+          axisLine: { show: true, onZero: false, lineStyle: { color: axisColor } },
+          axisTick: { show: true, lineStyle: { color: axisColor } },
+          axisLabel: { show: true, color: yLabelColor, fontSize: 10, formatter: v => Number(v).toFixed(1) },
+          splitLine: { show: true, lineStyle: { color: splitLineColor, type: 'dashed' } },
           min: yMin,
           max: yMax,
         });
@@ -1121,8 +1138,47 @@
         });
       });
 
+      // Shared bottom grid for time axis labels
+      const bottomGridTop = topPad + n * (rowHeight + labelHeight) + (n - 1) * gap;
+      grids.push({
+        top: bottomGridTop,
+        left: gridLeft,
+        right: gridRight,
+        height: xAxisHeight,
+        containLabel: false,
+        show: true,
+        borderColor: 'transparent',
+        borderWidth: 0,
+        backgroundColor: 'transparent',
+      });
+
+      xAxes.push({
+        type: 'category',
+        data: timeLabels,
+        gridIndex: n,
+        axisLine: { show: true, onZero: false, lineStyle: { color: axisColor } },
+        axisTick: { show: true, lineStyle: { color: axisColor } },
+        axisLabel: {
+          show: true,
+          color: labelColor,
+          rotate: timeLabels.length > 20 ? 45 : 0,
+          fontSize: 10,
+        },
+        axisPointer: { show: true, type: 'line', lineStyle: { color: '#4f46e5', width: 2 } },
+        position: 'bottom',
+      });
+
+      // Dummy yAxis for the bottom grid to prevent ECharts internal errors
+      yAxes.push({
+        type: 'value',
+        gridIndex: n,
+        show: false,
+        min: 0,
+        max: 1,
+      });
+
       return {
-        backgroundColor: '#ffffff',
+        backgroundColor: isDark ? '#111827' : '#ffffff',
         tooltip: {
           show: true,
           trigger: 'axis',
@@ -1150,13 +1206,14 @@
         .filter(d => d !== null);
 
       return {
+        backgroundColor: isDark ? '#111827' : 'transparent',
         tooltip: {
           trigger: 'item',
           formatter: (params) => `${xVar}: ${params.data[0]}<br/>${yVar}: ${params.data[1]}`,
         },
         grid: { left: '3%', right: '4%', bottom: '3%', top: '3%', containLabel: true },
-        xAxis: { type: 'value', name: xVar, nameTextStyle: { fontSize: 11 } },
-        yAxis: { type: 'value', name: yVar, nameTextStyle: { fontSize: 11 } },
+        xAxis: { type: 'value', name: xVar, nameTextStyle: { fontSize: 11, color: isDark ? '#d1d5db' : '#333' }, axisLabel: { color: isDark ? '#d1d5db' : '#333' }, splitLine: { lineStyle: { color: isDark ? '#374151' : '#eee' } } },
+        yAxis: { type: 'value', name: yVar, nameTextStyle: { fontSize: 11, color: isDark ? '#d1d5db' : '#333' }, axisLabel: { color: isDark ? '#d1d5db' : '#333' }, splitLine: { lineStyle: { color: isDark ? '#374151' : '#eee' } } },
         series: [{ type: 'scatter', data: scatterData, symbolSize: 8 }],
       };
     }
@@ -1176,15 +1233,17 @@
         .filter(d => d !== null);
 
       return {
+        backgroundColor: isDark ? '#111827' : 'transparent',
         tooltip: {
           formatter: (params) => `${xVar}: ${params.data[0]}<br/>${yVar}: ${params.data[1]}<br/>${zVar}: ${params.data[2]}`,
         },
-        xAxis3D: { type: 'value', name: xVar, nameTextStyle: { fontSize: 11 } },
-        yAxis3D: { type: 'value', name: yVar, nameTextStyle: { fontSize: 11 } },
-        zAxis3D: { type: 'value', name: zVar, nameTextStyle: { fontSize: 11 } },
+        xAxis3D: { type: 'value', name: xVar, nameTextStyle: { fontSize: 11, color: isDark ? '#d1d5db' : '#333' }, axisLabel: { color: isDark ? '#d1d5db' : '#333' } },
+        yAxis3D: { type: 'value', name: yVar, nameTextStyle: { fontSize: 11, color: isDark ? '#d1d5db' : '#333' }, axisLabel: { color: isDark ? '#d1d5db' : '#333' } },
+        zAxis3D: { type: 'value', name: zVar, nameTextStyle: { fontSize: 11, color: isDark ? '#d1d5db' : '#333' }, axisLabel: { color: isDark ? '#d1d5db' : '#333' } },
         grid3D: {
           boxWidth: 200, boxDepth: 80,
           viewControl: { autoRotate: false },
+          light: { main: { intensity: isDark ? 0.8 : 1.2 } },
         },
         series: [{
           type: 'scatter3D',

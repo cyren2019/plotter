@@ -1,0 +1,11 @@
+[   11986ms] TypeError: r.getAxesOnZeroOf is not a function
+    at eI (http://127.0.0.1:8080/lib/echarts.min.js:45:394877)
+    at e.render (http://127.0.0.1:8080/lib/echarts.min.js:45:414981)
+    at http://127.0.0.1:8080/lib/echarts.min.js:45:215844
+    at Array.forEach (<anonymous>)
+    at E (http://127.0.0.1:8080/lib/echarts.min.js:35:5100)
+    at jv (http://127.0.0.1:8080/lib/echarts.min.js:45:215782)
+    at Zv (http://127.0.0.1:8080/lib/echarts.min.js:45:215624)
+    at e.update (http://127.0.0.1:8080/lib/echarts.min.js:45:211033)
+    at e.setOption (http://127.0.0.1:8080/lib/echarts.min.js:45:199273)
+    at renderChart (http://127.0.0.1:8080/:960:23)
