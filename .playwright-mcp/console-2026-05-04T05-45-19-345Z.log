@@ -1,4 +1,0 @@
-[   13505ms] ReferenceError: xAxisHeight is not defined
-    at buildTimeSeriesOption (http://127.0.0.1:8080/:1136:17)
-    at renderChart (http://127.0.0.1:8080/:954:38)
-    at http://127.0.0.1:8080/:900:35
