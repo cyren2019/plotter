@@ -1,0 +1,48 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - generic [ref=e4]:
+      - img [ref=e5]
+      - text: 数据绘图工具
+    - generic [ref=e7]:
+      - generic [ref=e24]: test.csv
+      - button "导入" [ref=e8] [cursor=pointer]:
+        - img [ref=e9]
+        - text: 导入
+  - main [ref=e12]:
+    - complementary [ref=e81]:
+      - generic [ref=e82]:
+        - generic [ref=e83]:
+          - img [ref=e84]
+          - generic [ref=e86]: 变量选择
+        - generic [ref=e87]:
+          - img [ref=e88]
+          - textbox "搜索变量…" [ref=e91]
+        - generic [ref=e92]:
+          - button "全选" [ref=e93] [cursor=pointer]
+          - button "取消" [ref=e94] [cursor=pointer]
+        - generic [ref=e95]:
+          - generic [ref=e96]: "3"
+          - generic [ref=e97]: / 3 个变量
+      - generic [ref=e98]:
+        - generic [ref=e99]:
+          - img [ref=e100]
+          - generic [ref=e103]: time
+          - generic [ref=e104]: 时间轴
+        - generic [ref=e105] [cursor=pointer]:
+          - img [ref=e107]
+          - generic [ref=e109]: a
+        - generic [ref=e111] [cursor=pointer]:
+          - img [ref=e113]
+          - generic [ref=e115]: b
+        - generic [ref=e117] [cursor=pointer]:
+          - img [ref=e119]
+          - generic [ref=e121]: c
+    - generic [ref=e123]:
+      - navigation [ref=e124]:
+        - button "时序图" [ref=e125] [cursor=pointer]
+        - button "XY图" [ref=e126] [cursor=pointer]
+        - button "XYZ图" [ref=e127] [cursor=pointer]
+        - generic [ref=e128]:
+          - button "合并" [ref=e129] [cursor=pointer]
+          - button "分图" [ref=e130] [cursor=pointer]
+      - generic [ref=e132]: 时序图

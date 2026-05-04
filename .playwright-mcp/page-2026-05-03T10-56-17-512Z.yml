@@ -1,0 +1,16 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - generic [ref=e4]:
+      - img [ref=e5]
+      - text: 数据绘图工具
+    - button "导入" [ref=e8] [cursor=pointer]:
+      - img [ref=e9]
+      - text: 导入
+  - main [ref=e12]:
+    - generic [ref=e13]:
+      - img [ref=e15]
+      - heading "拖放或点击导入数据文件" [level=2] [ref=e18]
+      - paragraph [ref=e19]: 支持 CSV、Excel (.xls, .xlsx) 格式
+      - button "选择文件" [ref=e20] [cursor=pointer]:
+        - img [ref=e21]
+        - text: 选择文件
