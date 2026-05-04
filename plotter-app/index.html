@@ -52,11 +52,12 @@
       display: flex; align-items: center; gap: 12px;
     }
     .theme-toggle {
-      display: inline-flex; align-items: center; gap: 4px;
-      padding: 4px 8px;
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 12px;
+      font-size: 12px; font-weight: 500;
       border-radius: 6px; border: 1px solid var(--border);
       background: var(--bg); color: var(--text);
-      cursor: pointer; font-size: 12px;
+      cursor: pointer;
       transition: all 0.15s;
     }
     .theme-toggle:hover {
@@ -617,6 +618,7 @@
     let selectedVars = [];
     let plotType = 'time-series';
     let timeSeriesMode = 'separate'; // 'merged' | 'separate'
+    let separateAutoScale = true; // Y-axis auto-scale in separate mode
     let chartInstance = null;
     let dragCounter = 0;
 
@@ -853,9 +855,14 @@
           <button class="btn ${plotType === 'time-series' ? 'active' : ''}" data-type="time-series">时序图</button>
           <button class="btn ${plotType === 'xy' ? 'active' : ''}" data-type="xy">XY图</button>
           <button class="btn ${plotType === 'xyz' ? 'active' : ''}" data-type="xyz">XYZ图</button>
-          <div class="ts-toggle" style="display: ${tsToggleVisible ? 'flex' : 'none'}">
-            <button class="btn ${timeSeriesMode === 'merged' ? 'active' : ''}" data-mode="merged">合并</button>
-            <button class="btn ${timeSeriesMode === 'separate' ? 'active' : ''}" data-mode="separate">分图</button>
+          <div style="display: flex; align-items: center; gap: 4px; margin-left: auto;">
+            <div class="ts-toggle" style="display: ${tsToggleVisible && timeSeriesMode === 'separate' ? 'flex' : 'none'}">
+              <button class="btn ${separateAutoScale ? 'active' : ''}" data-auto-scale="toggle">自适应</button>
+            </div>
+            <div class="ts-toggle" style="display: ${tsToggleVisible ? 'flex' : 'none'}">
+              <button class="btn ${timeSeriesMode === 'merged' ? 'active' : ''}" data-mode="merged">合并</button>
+              <button class="btn ${timeSeriesMode === 'separate' ? 'active' : ''}" data-mode="separate">分图</button>
+            </div>
           </div>
         </nav>
         <div class="plot-label"><span>${getModeLabel()}</span></div>
@@ -882,6 +889,15 @@
           renderApp();
         });
       });
+
+      const autoScaleBtn = plotSection.querySelector('.btn[data-auto-scale]');
+      if (autoScaleBtn) {
+        autoScaleBtn.addEventListener('click', () => {
+          separateAutoScale = !separateAutoScale;
+          autoScaleBtn.classList.toggle('active', separateAutoScale);
+          renderChart();
+        });
+      }
 
       mainArea.innerHTML = '';
       mainArea.appendChild(sidebar);
@@ -1036,11 +1052,10 @@
       const rowHeight = 200; // px, fixed height per subplot
       const gap = 20; // px, gap between subplots (increased)
       const topPad = 8; // px
-      const xAxisHeight = 10; // px for shared bottom time axis (increased for label + tick space)
-      const dataZoomHeight = 50; // px for dataZoom slider at bottom
+      const xAxisHeight = 15; // px for shared bottom time axis (increased for label + tick space)
       const labelHeight = 10; // px for variable name label below each subplot
       const bottomGap = 8; // px, small space between last label and bottom axis
-      const totalHeight = topPad + n * (rowHeight + labelHeight) + (n - 1) * gap + bottomGap + xAxisHeight + dataZoomHeight;
+      const totalHeight = topPad + n * (rowHeight + labelHeight) + (n - 1) * gap + bottomGap + xAxisHeight;
 
       const grids = [];
       const graphics = [];
@@ -1061,22 +1076,6 @@
 
       varsToPlot.forEach((variable, i) => {
         const top = topPad + i * (rowHeight + labelHeight + gap);
-
-        // Calculate min/max for this variable to auto-fit Y-axis
-        const values = rows
-          .map(row => row[variable])
-          .filter(v => v !== null && v !== undefined && !isNaN(Number(v)) && isFinite(Number(v)))
-          .map(v => Number(v));
-        let yMin = values.length ? Math.min(...values) : 0;
-        let yMax = values.length ? Math.max(...values) : 1;
-        const padding = (yMax - yMin) * 0.1;
-        if (padding === 0) {
-          yMin -= 1;
-          yMax += 1;
-        } else {
-          yMin -= padding;
-          yMax += padding;
-        }
 
         grids.push({
           top: top,
@@ -1113,7 +1112,7 @@
           },
         });
 
-        yAxes.push({
+        const yAxisConfig = {
           type: 'value',
           gridIndex: i,
           show: true,
@@ -1121,9 +1120,25 @@
           axisTick: { show: true, lineStyle: { color: axisColor } },
           axisLabel: { show: true, color: yLabelColor, fontSize: 10, formatter: v => Number(v).toFixed(1) },
           splitLine: { show: true, lineStyle: { color: splitLineColor, type: 'dashed' } },
-          min: yMin,
-          max: yMax,
-        });
+        };
+
+        if (separateAutoScale) {
+          yAxisConfig.scale = true;
+        } else {
+          const values = rows
+            .map(row => row[variable])
+            .filter(v => v !== null && v !== undefined && !isNaN(Number(v)) && isFinite(Number(v)))
+            .map(v => Number(v));
+          let yMin = values.length ? Math.min(...values) : 0;
+          let yMax = values.length ? Math.max(...values) : 1;
+          const padding = (yMax - yMin) * 0.1;
+          if (padding === 0) { yMin -= 1; yMax += 1; }
+          else { yMin -= padding; yMax += padding; }
+          yAxisConfig.min = yMin;
+          yAxisConfig.max = yMax;
+        }
+
+        yAxes.push(yAxisConfig);
 
         series.push({
           name: variable,
@@ -1197,17 +1212,6 @@
         animation: false,
         dataZoom: [
           {
-            type: 'slider',
-            xAxisIndex: allXAxisIndices,
-            start: 0,
-            end: 100,
-            bottom: 0,
-            borderColor: isDark ? '#374151' : '#ddd',
-            fillerColor: isDark ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.1)',
-            handleStyle: { color: isDark ? '#9ca3af' : '#999' },
-            textStyle: { color: isDark ? '#d1d5db' : '#333' },
-          },
-          {
             type: 'inside',
             xAxisIndex: allXAxisIndices,
             start: 0,
@@ -1238,8 +1242,8 @@
           formatter: (params) => `${xVar}: ${params.data[0]}<br/>${yVar}: ${params.data[1]}`,
         },
         grid: { left: '3%', right: '4%', bottom: '3%', top: '3%', containLabel: true },
-        xAxis: { type: 'value', name: xVar, nameTextStyle: { fontSize: 11, color: isDark ? '#d1d5db' : '#333' }, axisLabel: { color: isDark ? '#d1d5db' : '#333' }, splitLine: { lineStyle: { color: isDark ? '#374151' : '#eee' } } },
-        yAxis: { type: 'value', name: yVar, nameTextStyle: { fontSize: 11, color: isDark ? '#d1d5db' : '#333' }, axisLabel: { color: isDark ? '#d1d5db' : '#333' }, splitLine: { lineStyle: { color: isDark ? '#374151' : '#eee' } } },
+        xAxis: { type: 'value', name: xVar, nameLocation: 'center', nameGap: 25, nameTextStyle: { fontSize: 11, color: isDark ? '#d1d5db' : '#333' }, axisLabel: { color: isDark ? '#d1d5db' : '#333' }, splitLine: { lineStyle: { color: isDark ? '#374151' : '#eee' } } },
+        yAxis: { type: 'value', name: yVar, nameLocation: 'center', nameGap: 30, nameRotate: 90, nameTextStyle: { fontSize: 11, color: isDark ? '#d1d5db' : '#333' }, axisLabel: { color: isDark ? '#d1d5db' : '#333' }, splitLine: { lineStyle: { color: isDark ? '#374151' : '#eee' } } },
         series: [{ type: 'scatter', data: scatterData, symbolSize: 8 }],
       };
     }
