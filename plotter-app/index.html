@@ -765,13 +765,12 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
             <span>变量选择</span>
           </div>
-          <div class="search-box">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input type="text" id="${searchId}" placeholder="搜索变量…">
-          </div>
-          <div class="sidebar-actions">
-            <button class="btn" id="selectAllBtn">全选</button>
-            <button class="btn" id="deselectAllBtn">取消</button>
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <div class="search-box" style="flex: 1; margin-bottom: 0;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" id="${searchId}" placeholder="搜索变量…">
+            </div>
+            <button class="btn" id="deselectAllBtn" style="flex-shrink: 0;">取消选择</button>
           </div>
           <div class="selected-count">
             <span class="badge ${selectedVars.length === 0 ? 'empty' : ''}">${selectedVars.length}</span>
@@ -858,11 +857,6 @@
         renderVars(e.target.value);
       });
 
-      sidebar.querySelector('#selectAllBtn').addEventListener('click', () => {
-        const max = getMaxSelectable();
-        selectedVars = vars.slice(0, max);
-        renderApp();
-      });
       sidebar.querySelector('#deselectAllBtn').addEventListener('click', () => {
         selectedVars = [];
         renderApp();
@@ -871,17 +865,20 @@
       const plotSection = document.createElement('section');
       plotSection.className = 'plot-section';
 
-      const tsToggleVisible = plotType === 'time-series' && selectedVars.length > 1;
+      const tsToggleVisible = plotType === 'time-series';
       plotSection.innerHTML = `
         <nav class="plot-tabs">
           <button class="btn ${plotType === 'time-series' ? 'active' : ''}" data-type="time-series">时序图</button>
           <button class="btn ${plotType === 'xy' ? 'active' : ''}" data-type="xy">XY图</button>
           <button class="btn ${plotType === 'xyz' ? 'active' : ''}" data-type="xyz">XYZ图</button>
-          <div style="display: flex; align-items: center; gap: 4px; margin-left: auto;">
-            <div class="ts-toggle" style="display: ${tsToggleVisible && timeSeriesMode === 'separate' ? 'flex' : 'none'}">
+          <div style="display: ${tsToggleVisible ? 'flex' : 'none'}; align-items: center; gap: 4px; margin-left: auto;">
+            <div class="ts-toggle" style="display: ${timeSeriesMode === 'separate' ? 'flex' : 'none'}">
               <button class="btn ${separateAutoScale ? 'active' : ''}" data-auto-scale="toggle">自适应</button>
             </div>
-            <div class="ts-toggle" style="display: ${tsToggleVisible ? 'flex' : 'none'}">
+            <div class="ts-toggle">
+              <button class="btn" data-reset="zoom">图像复位</button>
+            </div>
+            <div class="ts-toggle">
               <button class="btn ${timeSeriesMode === 'merged' ? 'active' : ''}" data-mode="merged">合并</button>
               <button class="btn ${timeSeriesMode === 'separate' ? 'active' : ''}" data-mode="separate">分图</button>
             </div>
@@ -925,6 +922,19 @@
             }
           }
           renderChart();
+        });
+      }
+
+      const resetZoomBtn = plotSection.querySelector('.btn[data-reset="zoom"]');
+      if (resetZoomBtn) {
+        resetZoomBtn.addEventListener('click', () => {
+          if (chartInstance) {
+            chartInstance.dispatchAction({
+              type: 'dataZoom',
+              start: 0,
+              end: 100,
+            });
+          }
         });
       }
 
