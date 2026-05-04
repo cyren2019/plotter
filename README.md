@@ -68,3 +68,8 @@ plotter-app/
 ## 许可证
 
 MIT
+
+## 致谢
+
+- [openCode](https://github.com/anomalyco/opencode)
+- [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent)
