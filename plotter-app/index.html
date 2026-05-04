@@ -619,6 +619,7 @@
     let plotType = 'time-series';
     let timeSeriesMode = 'separate'; // 'merged' | 'separate'
     let separateAutoScale = true; // Y-axis auto-scale in separate mode
+    let restoreZoom = null; // { start, end } — preserved dataZoom state across re-renders
     let chartInstance = null;
     let dragCounter = 0;
 
@@ -895,6 +896,13 @@
         autoScaleBtn.addEventListener('click', () => {
           separateAutoScale = !separateAutoScale;
           autoScaleBtn.classList.toggle('active', separateAutoScale);
+          // Preserve zoom position across auto-scale toggle
+          if (chartInstance) {
+            const opt = chartInstance.getOption();
+            if (opt && opt.dataZoom && opt.dataZoom.length > 0) {
+              restoreZoom = { start: opt.dataZoom[0].start, end: opt.dataZoom[0].end };
+            }
+          }
           renderChart();
         });
       }
@@ -967,6 +975,15 @@
       }
 
       chartInstance = echarts.init(container);
+
+      // Double-click to reset zoom
+      chartInstance.on('dblclick', () => {
+        chartInstance.dispatchAction({
+          type: 'dataZoom',
+          start: 0,
+          end: 100,
+        });
+      });
 
       let option;
       switch (plotType) {
@@ -1197,6 +1214,11 @@
       // All X axis indices including the shared bottom axis
       const allXAxisIndices = Array.from({ length: n + 1 }, (_, idx) => idx);
 
+      // Preserve zoom state across auto-scale toggle
+      const zoomStart = restoreZoom ? restoreZoom.start : 0;
+      const zoomEnd = restoreZoom ? restoreZoom.end : 100;
+      restoreZoom = null;
+
       return {
         backgroundColor: isDark ? '#111827' : '#ffffff',
         tooltip: {
@@ -1214,8 +1236,8 @@
           {
             type: 'inside',
             xAxisIndex: allXAxisIndices,
-            start: 0,
-            end: 100,
+            start: zoomStart,
+            end: zoomEnd,
             zoomOnMouseWheel: true,
             moveOnMouseMove: true,
           },
