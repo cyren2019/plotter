@@ -193,15 +193,15 @@
       display: flex; align-items: center; gap: 10px;
       padding: 10px 16px;
       border-bottom: 1px solid var(--border);
-      background: var(--text); opacity: 0.03;
+      background: rgba(128, 128, 128, 0.04);
     }
-    .time-row svg { width: 14px; height: 14px; color: var(--text); opacity: 0.25; }
-    .time-row .name { font-size: 12px; color: var(--text); opacity: 0.4; flex: 1; }
+    .time-row svg { width: 14px; height: 14px; color: var(--text); opacity: 0.35; }
+    .time-row .name { font-size: 12px; color: var(--text); opacity: 0.5; flex: 1; }
     .time-row .tag {
       font-size: 10px; padding: 2px 6px;
       border-radius: 9999px;
       background: var(--text); opacity: 0.06;
-      color: var(--text); opacity: 0.35;
+      color: var(--text); opacity: 0.45;
       border: 1px solid var(--border);
     }
     .var-item {
@@ -428,6 +428,16 @@
       }
       const trimmed = String(value).trim();
       if (trimmed === '') return null;
+
+      // Handle "YYYY-MM-DD HH:mm:ss NNNms" format
+      const msMatch = trimmed.match(/^(\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}:\d{2})\s+(\d{1,3})\s*ms$/i);
+      if (msMatch) {
+        const d = dayjs(msMatch[1]);
+        if (d.isValid()) {
+          return d.add(parseInt(msMatch[2], 10), 'millisecond').toDate();
+        }
+      }
+
       const native = dayjs(trimmed);
       if (native.isValid()) return native.toDate();
       for (const fmt of TIME_FORMATS) {
@@ -727,6 +737,16 @@
       }
       emptyState.style.display = 'none';
 
+      // Preserve zoom state across variable selection / mode changes
+      if (chartInstance && !restoreZoom) {
+        try {
+          const opt = chartInstance.getOption();
+          if (opt && opt.dataZoom && opt.dataZoom.length > 0) {
+            restoreZoom = { start: opt.dataZoom[0].start, end: opt.dataZoom[0].end };
+          }
+        } catch (e) { /* ignore */ }
+      }
+
       // Preserve search value and scroll position before re-rendering
       const oldSearchInput = document.querySelector('.search-box input');
       const savedSearchValue = oldSearchInput ? oldSearchInput.value : '';
@@ -786,11 +806,12 @@
           ? vars.filter(v => v.toLowerCase().includes(filter.toLowerCase().trim()))
           : vars;
 
-        // Remove existing var items
-        varList.querySelectorAll('.var-item').forEach(el => el.remove());
+        // Remove existing var items and empty messages
+        varList.querySelectorAll('.var-item, .var-empty').forEach(el => el.remove());
 
         if (filtered.length === 0 && vars.length > 0) {
           const empty = document.createElement('div');
+          empty.className = 'var-empty';
           empty.style.cssText = 'padding: 40px 16px; text-align: center; font-size: 12px; color: var(--text); opacity: 0.3;';
           empty.textContent = '无匹配变量';
           varList.appendChild(empty);
@@ -966,9 +987,11 @@
       msgEl.style.display = 'none';
 
       // Pre-set container height before init to ensure correct canvas size
+      // Must match constants in buildTimeSeriesOption() separate mode
       if (plotType === 'time-series' && timeSeriesMode === 'separate') {
         const n = Math.min(selectedVars.length, 10);
-        const totalHeight = 8 + n * (200 + 20) + (n - 1) * 40 + 8 + 44 + 36;
+        const rowHeight = 200, labelHeight = 10, gap = 20, topPad = 8, bottomGap = 8, xAxisHeight = 15;
+        const totalHeight = topPad + n * (rowHeight + labelHeight) + (n - 1) * gap + bottomGap + xAxisHeight;
         container.style.height = totalHeight + 'px';
       } else {
         container.style.height = '100%';
@@ -1001,8 +1024,12 @@
         requestAnimationFrame(() => chartInstance && chartInstance.resize());
       }
 
-      const resizeHandler = () => chartInstance && chartInstance.resize();
-      window.addEventListener('resize', resizeHandler);
+      // Replace stale resize handler to prevent duplicate listeners
+      if (chartInstance._resizeHandler) {
+        window.removeEventListener('resize', chartInstance._resizeHandler);
+      }
+      chartInstance._resizeHandler = () => chartInstance && chartInstance.resize();
+      window.addEventListener('resize', chartInstance._resizeHandler);
     }
 
     function getChartMessage() {
@@ -1020,7 +1047,18 @@
         return String(val ?? '');
       });
 
+      const formatTooltipTime = (dataIndex) => {
+        const val = rows[dataIndex]?.[timeColumn];
+        if (val instanceof Date) return dayjs(val).format('YYYY-MM-DD HH:mm:ss.SSS');
+        return timeLabels[dataIndex] ?? '';
+      };
+
       const varsToPlot = selectedVars.slice(0, 10);
+
+      // Preserve zoom state across re-renders
+      const zoomStart = restoreZoom ? restoreZoom.start : 0;
+      const zoomEnd = restoreZoom ? restoreZoom.end : 100;
+      restoreZoom = null;
 
       // Merged mode: all series in one chart, shared Y-axis
       if (timeSeriesMode === 'merged') {
@@ -1037,7 +1075,13 @@
 
         return {
           backgroundColor: isDark ? '#111827' : 'transparent',
-          tooltip: { trigger: 'axis' },
+          tooltip: {
+            trigger: 'axis',
+            formatter: (params) => {
+              const title = formatTooltipTime(params[0].dataIndex);
+              return title + '<br/>' + params.map(p => p.marker + ' ' + p.seriesName + ': ' + (p.value ?? '-')).join('<br/>');
+            },
+          },
           legend: { type: 'scroll', bottom: 0, textStyle: { fontSize: 12, color: isDark ? '#d1d5db' : '#333' } },
           grid: {
             left: '3%', right: '4%',
@@ -1058,8 +1102,8 @@
           },
           series,
           dataZoom: [
-            { type: 'slider', start: 0, end: 100, bottom: varsToPlot.length > 5 ? '8%' : '4%', borderColor: isDark ? '#374151' : '#ddd', fillerColor: isDark ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.1)', handleStyle: { color: isDark ? '#9ca3af' : '#999' }, textStyle: { color: isDark ? '#d1d5db' : '#333' } },
-            { type: 'inside' },
+            { type: 'slider', start: zoomStart, end: zoomEnd, bottom: varsToPlot.length > 5 ? '8%' : '4%', borderColor: isDark ? '#374151' : '#ddd', fillerColor: isDark ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.1)', handleStyle: { color: isDark ? '#9ca3af' : '#999' }, textStyle: { color: isDark ? '#d1d5db' : '#333' } },
+            { type: 'inside', start: zoomStart, end: zoomEnd },
           ],
         };
       }
@@ -1124,7 +1168,7 @@
           top: top + rowHeight + 4,
           style: {
             text: variable,
-            fill: isDark ? '#f9fafb' : '#4f46e5',
+            fill: isDark ? '#f9fafb' : '#111827',
             font: 'bold 12px sans-serif',
           },
         });
@@ -1214,17 +1258,17 @@
       // All X axis indices including the shared bottom axis
       const allXAxisIndices = Array.from({ length: n + 1 }, (_, idx) => idx);
 
-      // Preserve zoom state across auto-scale toggle
-      const zoomStart = restoreZoom ? restoreZoom.start : 0;
-      const zoomEnd = restoreZoom ? restoreZoom.end : 100;
-      restoreZoom = null;
-
       return {
         backgroundColor: isDark ? '#111827' : '#ffffff',
         tooltip: {
           show: true,
           trigger: 'axis',
           axisPointer: { type: 'line', lineStyle: { color: '#ff0000', width: 3 } },
+          formatter: (params) => {
+            const idx = params[0]?.dataIndex;
+            const title = idx != null ? formatTooltipTime(idx) : '';
+            return title + '<br/>' + params.map(p => p.marker + ' ' + p.seriesName + ': ' + (p.value ?? '-')).join('<br/>');
+          },
         },
         graphic: graphics,
         grid: grids,
@@ -1238,8 +1282,6 @@
             xAxisIndex: allXAxisIndices,
             start: zoomStart,
             end: zoomEnd,
-            zoomOnMouseWheel: true,
-            moveOnMouseMove: true,
           },
         ],
       };
@@ -1266,7 +1308,7 @@
         grid: { left: '3%', right: '4%', bottom: '3%', top: '3%', containLabel: true },
         xAxis: { type: 'value', name: xVar, nameLocation: 'center', nameGap: 25, nameTextStyle: { fontSize: 11, color: isDark ? '#d1d5db' : '#333' }, axisLabel: { color: isDark ? '#d1d5db' : '#333' }, splitLine: { lineStyle: { color: isDark ? '#374151' : '#eee' } } },
         yAxis: { type: 'value', name: yVar, nameLocation: 'center', nameGap: 30, nameRotate: 90, nameTextStyle: { fontSize: 11, color: isDark ? '#d1d5db' : '#333' }, axisLabel: { color: isDark ? '#d1d5db' : '#333' }, splitLine: { lineStyle: { color: isDark ? '#374151' : '#eee' } } },
-        series: [{ type: 'scatter', data: scatterData, symbolSize: 8 }],
+        series: [{ type: 'scatter', data: scatterData, symbolSize: 4 }],
       };
     }
 
@@ -1300,7 +1342,7 @@
         series: [{
           type: 'scatter3D',
           data: rawData,
-          symbolSize: 8,
+          symbolSize: 4,
           itemStyle: { opacity: 0.8 },
         }],
       };
