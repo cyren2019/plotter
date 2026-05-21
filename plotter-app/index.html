@@ -370,7 +370,7 @@
       <button class="close" id="errorClose">&times;</button>
     </div>
 
-    <input type="file" id="fileInput" accept=".csv,.xls,.xlsx">
+    <input type="file" id="fileInput" accept=".csv,.xls,.xlsx,.log,.txt" />
 
     <main id="mainArea">
       <div class="empty-state" id="emptyState">
@@ -378,7 +378,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
         </div>
         <h2>拖放或点击导入数据文件</h2>
-        <p>支持 CSV、Excel (.xls, .xlsx) 格式</p>
+        <p>支持 CSV、Excel (.xls, .xlsx)、日志 (.log, .txt) 格式</p>
         <button class="btn btn-primary" id="emptyImportBtn">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           选择文件
@@ -618,7 +618,7 @@
 
     async function parseFile(file) {
       const name = file.name.toLowerCase();
-      if (name.endsWith('.csv')) return parseCSV(file);
+      if (name.endsWith('.csv') || name.endsWith('.log') || name.endsWith('.txt')) return parseCSV(file);
       if (name.endsWith('.xls') || name.endsWith('.xlsx')) return parseExcel(file);
       throw new Error('不支持的文件格式：' + file.name);
     }
@@ -682,7 +682,7 @@
     async function processFile(file) {
       hideError();
       const ext = file.name.split('.').pop().toLowerCase();
-      if (!['csv', 'xls', 'xlsx'].includes(ext)) {
+      if (!['csv', 'xls', 'xlsx', 'log', 'txt'].includes(ext)) {
         showError('不支持的文件格式：' + file.name);
         return;
       }
