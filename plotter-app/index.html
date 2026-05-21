@@ -577,7 +577,23 @@
     }
 
     async function parseCSV(file) {
-      const text = await readFileAsText(file);
+      const buffer = await readFileAsArrayBuffer(file);
+      let text;
+      try {
+        // 优先尝试 UTF-8，遇到非法序列则抛异常
+        const decoder = new TextDecoder('utf-8', { fatal: true });
+        text = decoder.decode(new Uint8Array(buffer));
+      } catch (e) {
+        // 回退到 GB18030（兼容 GBK、GB2312），解决中文编码乱码
+        try {
+          const decoder = new TextDecoder('gb18030', { fatal: false });
+          text = decoder.decode(new Uint8Array(buffer));
+        } catch (e2) {
+          // 最终兜底：UTF-8 非严格模式
+          const decoder = new TextDecoder('utf-8', { fatal: false });
+          text = decoder.decode(new Uint8Array(buffer));
+        }
+      }
       const sep = detectSeparator(text);
       const lines = text.split('\n').filter(l => l.trim() !== '');
       if (lines.length === 0) return { headers: [], rows: [], timeColumn: '', timeFormat: 'unknown' };
