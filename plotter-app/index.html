@@ -13,6 +13,7 @@
       --text-h: #111827;
       --border: #e5e7eb;
       --bg: #ffffff;
+      --sidebar-width: 260px;
     }
     [data-theme="dark"] {
       --text: #d1d5db;
@@ -134,11 +135,23 @@
 
     /* Sidebar */
     .sidebar {
-      width: 260px; min-width: 260px;
+      width: var(--sidebar-width);
+      min-width: 10vw;
+      max-width: 40vw;
       display: flex; flex-direction: column;
       border-right: 1px solid var(--border);
       background: var(--bg);
       flex-shrink: 0;
+    }
+    .resizer {
+      width: 4px;
+      cursor: col-resize;
+      background: transparent;
+      flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    .resizer:hover, .resizer.dragging {
+      background: var(--accent);
     }
     .sidebar-header {
       padding: 16px 16px 12px;
@@ -203,6 +216,21 @@
       background: var(--accent);
       color: #fff;
       font-weight: 500;
+    }
+    .time-select {
+      flex: 1;
+      padding: 4px 8px;
+      font-size: 12px;
+      font-family: inherit;
+      color: var(--text-h);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      outline: none;
+      cursor: pointer;
+    }
+    .time-select:focus {
+      border-color: var(--accent-border);
     }
     .var-item {
       display: flex; align-items: center; gap: 10px;
@@ -418,8 +446,6 @@
       'YYYY-MM-DDTHHmmss', 'YYYY-MM-DDTHHmm',
     ];
 
-    const TIME_KEYWORDS = ['time', 'date', 'datetime', 'timestamp', '时间', '日期', '時刻', '日付'];
-
     function parseTime(value) {
       if (typeof value === 'number') {
         if (!Number.isFinite(value) || value <= 0) return null;
@@ -453,30 +479,6 @@
 
     function isTimeString(value) {
       return parseTime(value) !== null;
-    }
-
-    function detectTimeColumn(headers, rows) {
-      if (headers.length === 0) return { column: '', format: 'unknown' };
-      const scores = new Map();
-      const sampleSize = Math.min(rows.length, 50);
-      for (const header of headers) {
-        let score = 0;
-        const lower = header.toLowerCase();
-        if (TIME_KEYWORDS.some(kw => lower.includes(kw))) score += 20;
-        let parseable = 0;
-        for (let i = 0; i < sampleSize; i++) {
-          const val = rows[i]?.[header];
-          if (val != null && val !== '' && parseTime(String(val)) !== null) parseable++;
-        }
-        score += sampleSize > 0 ? (parseable / sampleSize) * 100 : 0;
-        scores.set(header, score);
-      }
-      let best = headers[0];
-      let bestScore = scores.get(best) ?? 0;
-      for (const [h, s] of scores) {
-        if (s > bestScore) { bestScore = s; best = h; }
-      }
-      return { column: best, format: detectColumnFormat(best, rows) };
     }
 
     function detectColumnFormat(column, rows) {
@@ -596,7 +598,7 @@
       }
       const sep = detectSeparator(text);
       const lines = text.split('\n').filter(l => l.trim() !== '');
-      if (lines.length === 0) return { headers: [], rows: [], timeColumn: '', timeFormat: 'unknown' };
+      if (lines.length === 0) return { headers: [], rawRows: [], rows: [], timeColumn: '', timeFormat: 'unknown' };
       const headers = splitCSVLine(lines[0], sep);
       const rawRows = [];
       for (let i = 1; i < lines.length; i++) {
@@ -610,8 +612,9 @@
         for (const h of headers) row[h] = normalizeValue(raw[h]);
         return row;
       });
-      const timeResult = detectTimeColumn(headers, normalized);
-      return { headers, rows: processRows(headers, rawRows, timeResult.column), timeColumn: timeResult.column, timeFormat: timeResult.format };
+      const timeColumn = headers[0] || '';
+      const timeFormat = detectColumnFormat(timeColumn, normalized);
+      return { headers, rawRows, rows: processRows(headers, rawRows, timeColumn), timeColumn, timeFormat };
     }
 
     async function parseExcel(file) {
@@ -621,15 +624,16 @@
       if (!sheetName) return { headers: [], rows: [], timeColumn: '', timeFormat: 'unknown' };
       const sheet = workbook.Sheets[sheetName];
       const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-      if (rawRows.length === 0) return { headers: [], rows: [], timeColumn: '', timeFormat: 'unknown' };
+      if (rawRows.length === 0) return { headers: [], rawRows: [], rows: [], timeColumn: '', timeFormat: 'unknown' };
       const headers = Object.keys(rawRows[0]);
       const normalized = rawRows.map(raw => {
         const row = {};
         for (const h of headers) row[h] = normalizeValue(raw[h]);
         return row;
       });
-      const timeResult = detectTimeColumn(headers, normalized);
-      return { headers, rows: processRows(headers, rawRows, timeResult.column), timeColumn: timeResult.column, timeFormat: timeResult.format };
+      const timeColumn = headers[0] || '';
+      const timeFormat = detectColumnFormat(timeColumn, normalized);
+      return { headers, rawRows, rows: processRows(headers, rawRows, timeColumn), timeColumn, timeFormat };
     }
 
     async function parseFile(file) {
@@ -809,12 +813,35 @@
       // Time row
       const timeRow = document.createElement('div');
       timeRow.className = 'time-row';
+      const selectId = 'timeColumnSelect' + Date.now();
+      const options = data.headers.map(h =>
+        `<option value="${h}" ${h === data.timeColumn ? 'selected' : ''}>${h}</option>`
+      ).join('');
       timeRow.innerHTML = `
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        <span class="name">${data.timeColumn}</span>
-        <span class="tag">时间轴</span>
+        <select class="time-select" id="${selectId}">
+          ${options}
+        </select>
       `;
       varList.appendChild(timeRow);
+
+      const timeSelect = timeRow.querySelector('#' + selectId);
+      timeSelect.addEventListener('change', (e) => {
+        const newTimeColumn = e.target.value;
+        if (newTimeColumn === data.timeColumn) return;
+
+        // Remove new time column from selected vars if present
+        if (selectedVars.includes(newTimeColumn)) {
+          selectedVars = selectedVars.filter(v => v !== newTimeColumn);
+        }
+
+        // Re-process rows with new time column
+        data.rows = processRows(data.headers, data.rawRows, newTimeColumn);
+        data.timeColumn = newTimeColumn;
+        data.timeFormat = detectColumnFormat(newTimeColumn, data.rows);
+
+        renderApp();
+      });
 
       function renderVars(filter = '') {
         const filtered = filter.trim()
@@ -956,6 +983,40 @@
 
       mainArea.innerHTML = '';
       mainArea.appendChild(sidebar);
+
+      const resizer = document.createElement('div');
+      resizer.className = 'resizer';
+      mainArea.appendChild(resizer);
+
+      let isResizing = false;
+      resizer.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        resizer.classList.add('dragging');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        const startX = e.clientX;
+        const startWidth = sidebar.offsetWidth;
+
+        function onMouseMove(e) {
+          if (!isResizing) return;
+          const newWidth = Math.min(Math.max(180, startWidth + (e.clientX - startX)), window.innerWidth / 2);
+          document.documentElement.style.setProperty('--sidebar-width', newWidth + 'px');
+          if (chartInstance) requestAnimationFrame(() => chartInstance.resize());
+        }
+
+        function onMouseUp() {
+          isResizing = false;
+          resizer.classList.remove('dragging');
+          document.body.style.cursor = '';
+          document.body.style.userSelect = '';
+          document.removeEventListener('mousemove', onMouseMove);
+          document.removeEventListener('mouseup', onMouseUp);
+        }
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+      });
+
       mainArea.appendChild(plotSection);
 
       // Restore search value and re-filter after re-rendering
