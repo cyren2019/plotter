@@ -13,6 +13,7 @@
       --text-h: #111827;
       --border: #e5e7eb;
       --bg: #ffffff;
+      --sidebar-width: 260px;
     }
     [data-theme="dark"] {
       --text: #d1d5db;
@@ -134,11 +135,23 @@
 
     /* Sidebar */
     .sidebar {
-      width: 260px; min-width: 260px;
+      width: var(--sidebar-width);
+      min-width: 10vw;
+      max-width: 40vw;
       display: flex; flex-direction: column;
       border-right: 1px solid var(--border);
       background: var(--bg);
       flex-shrink: 0;
+    }
+    .resizer {
+      width: 4px;
+      cursor: col-resize;
+      background: transparent;
+      flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    .resizer:hover, .resizer.dragging {
+      background: var(--accent);
     }
     .sidebar-header {
       padding: 16px 16px 12px;
@@ -970,6 +983,40 @@
 
       mainArea.innerHTML = '';
       mainArea.appendChild(sidebar);
+
+      const resizer = document.createElement('div');
+      resizer.className = 'resizer';
+      mainArea.appendChild(resizer);
+
+      let isResizing = false;
+      resizer.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        resizer.classList.add('dragging');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        const startX = e.clientX;
+        const startWidth = sidebar.offsetWidth;
+
+        function onMouseMove(e) {
+          if (!isResizing) return;
+          const newWidth = Math.min(Math.max(180, startWidth + (e.clientX - startX)), window.innerWidth / 2);
+          document.documentElement.style.setProperty('--sidebar-width', newWidth + 'px');
+          if (chartInstance) requestAnimationFrame(() => chartInstance.resize());
+        }
+
+        function onMouseUp() {
+          isResizing = false;
+          resizer.classList.remove('dragging');
+          document.body.style.cursor = '';
+          document.body.style.userSelect = '';
+          document.removeEventListener('mousemove', onMouseMove);
+          document.removeEventListener('mouseup', onMouseUp);
+        }
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+      });
+
       mainArea.appendChild(plotSection);
 
       // Restore search value and re-filter after re-rendering
