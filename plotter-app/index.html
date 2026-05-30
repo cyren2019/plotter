@@ -644,6 +644,9 @@
     }
 
     // ===================== App State =====================
+    function escapeHtml(str) {
+      return String(str).replace(/[&<>"']/g, s => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
+    }
     let data = null;
     let selectedVars = [];
     let plotType = 'time-series';
@@ -689,6 +692,15 @@
     });
 
     // ===================== Error Handling =====================
+    function getThemeColors() {
+      return isDark
+        ? { bg: '#111827', text: '#d1d5db', textMuted: '#9ca3af', heading: '#f9fafb',
+            splitLine: '#374151', axisLine: '#999', gridBg: 'rgba(255,255,255,0.03)',
+            gridBorder: '#374151', yLabel: '#d1d5db', xLabel: '#d1d5db' }
+        : { bg: '#ffffff', text: '#333', textMuted: '#999', heading: '#111827',
+            splitLine: '#eee', axisLine: '#999', gridBg: 'rgba(128,128,128,0.05)',
+            gridBorder: '#e5e7eb', yLabel: '#333', xLabel: '#666' };
+    }
     function showError(msg) {
       errorText.textContent = msg;
       errorBanner.style.display = 'flex';
@@ -867,7 +879,7 @@
             <div class="checkbox">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
             </div>
-            <span class="name" title="${v}">${v}</span>
+            <span class="name" title="${escapeHtml(v)}">${escapeHtml(v)}</span>
             ${selectedVars.includes(v) ? '<div class="dot"></div>' : ''}
           `;
           item.addEventListener('click', () => {
@@ -1111,12 +1123,7 @@
         requestAnimationFrame(() => chartInstance && chartInstance.resize());
       }
 
-      // Replace stale resize handler to prevent duplicate listeners
-      if (chartInstance._resizeHandler) {
-        window.removeEventListener('resize', chartInstance._resizeHandler);
-      }
-      chartInstance._resizeHandler = () => chartInstance && chartInstance.resize();
-      window.addEventListener('resize', chartInstance._resizeHandler);
+      // Global resize handler (single, persistent — no per-render listener needed)
     }
 
     function getChartMessage() {
@@ -1149,6 +1156,7 @@
 
       // Merged mode: all series in one chart, shared Y-axis
       if (timeSeriesMode === 'merged') {
+        const tc = getThemeColors();
         const series = varsToPlot.map(variable => ({
           name: variable,
           type: 'line',
@@ -1161,15 +1169,15 @@
         }));
 
         return {
-          backgroundColor: isDark ? '#111827' : 'transparent',
+          backgroundColor: isDark ? tc.bg : 'transparent',
           tooltip: {
             trigger: 'axis',
             formatter: (params) => {
-              const title = formatTooltipTime(params[0].dataIndex);
+              const title = formatTooltipTime(params[0]?.dataIndex);
               return title + '<br/>' + params.map(p => p.marker + ' ' + p.seriesName + ': ' + (p.value ?? '-')).join('<br/>');
             },
           },
-          legend: { type: 'scroll', bottom: 0, textStyle: { fontSize: 12, color: isDark ? '#d1d5db' : '#333' } },
+          legend: { type: 'scroll', bottom: 0, textStyle: { fontSize: 12, color: tc.text } },
           grid: {
             left: '3%', right: '4%',
             bottom: varsToPlot.length > 5 ? '15%' : '10%',
@@ -1177,19 +1185,19 @@
           },
           xAxis: {
             type: 'category', data: timeLabels,
-            axisLabel: { rotate: timeLabels.length > 20 ? 45 : 0, fontSize: 11, color: isDark ? '#d1d5db' : '#333' },
-            axisLine: { lineStyle: { color: isDark ? '#9ca3af' : '#999' } },
+            axisLabel: { rotate: timeLabels.length > 20 ? 45 : 0, fontSize: 11, color: tc.text },
+            axisLine: { lineStyle: { color: tc.axisLine } },
           },
           yAxis: {
             type: 'value',
             name: varsToPlot.length === 1 ? varsToPlot[0] : '',
-            nameTextStyle: { fontSize: 11, color: isDark ? '#d1d5db' : '#333' },
-            axisLabel: { color: isDark ? '#d1d5db' : '#333' },
-            splitLine: { lineStyle: { color: isDark ? '#374151' : '#eee' } },
+            nameTextStyle: { fontSize: 11, color: tc.text },
+            axisLabel: { color: tc.text },
+            splitLine: { lineStyle: { color: tc.splitLine } },
           },
           series,
           dataZoom: [
-            { type: 'slider', start: zoomStart, end: zoomEnd, bottom: varsToPlot.length > 5 ? '8%' : '4%', borderColor: isDark ? '#374151' : '#ddd', fillerColor: isDark ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.1)', handleStyle: { color: isDark ? '#9ca3af' : '#999' }, textStyle: { color: isDark ? '#d1d5db' : '#333' } },
+            { type: 'slider', start: zoomStart, end: zoomEnd, bottom: varsToPlot.length > 5 ? '8%' : '4%', borderColor: tc.splitLine, fillerColor: isDark ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.1)', handleStyle: { color: tc.axisLine }, textStyle: { color: tc.text } },
             { type: 'inside', start: zoomStart, end: zoomEnd },
           ],
         };
@@ -1211,12 +1219,7 @@
       const yAxes = [];
       const series = [];
 
-      const axisColor = isDark ? '#9ca3af' : '#999';
-      const labelColor = isDark ? '#d1d5db' : '#666';
-      const yLabelColor = isDark ? '#d1d5db' : '#333';
-      const splitLineColor = isDark ? '#374151' : '#ccc';
-      const gridBg = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(128,128,128,0.05)';
-      const gridBorder = isDark ? '#374151' : '#e5e7eb';
+      const tc = getThemeColors();
 
       // Fixed left margin for strict alignment across all subplots
       const gridLeft = 60;
@@ -1232,9 +1235,9 @@
           height: rowHeight,
           containLabel: false,
           show: true,
-          borderColor: gridBorder,
+          borderColor: tc.gridBorder,
           borderWidth: 1,
-          backgroundColor: gridBg,
+          backgroundColor: tc.gridBg,
         });
 
         xAxes.push({
@@ -1264,10 +1267,10 @@
           type: 'value',
           gridIndex: i,
           show: true,
-          axisLine: { show: true, onZero: false, lineStyle: { color: axisColor } },
-          axisTick: { show: true, lineStyle: { color: axisColor } },
-          axisLabel: { show: true, color: yLabelColor, fontSize: 10, formatter: v => Number(v).toFixed(1) },
-          splitLine: { show: true, lineStyle: { color: splitLineColor, type: 'dashed' } },
+          axisLine: { show: true, onZero: false, lineStyle: { color: tc.axisLine } },
+          axisTick: { show: true, lineStyle: { color: tc.axisLine } },
+          axisLabel: { show: true, color: tc.yLabel, fontSize: 10, formatter: v => Number(v).toFixed(1) },
+          splitLine: { show: true, lineStyle: { color: tc.splitLine, type: 'dashed' } },
         };
 
         if (separateAutoScale) {
@@ -1277,8 +1280,14 @@
             .map(row => row[variable])
             .filter(v => v !== null && v !== undefined && !isNaN(Number(v)) && isFinite(Number(v)))
             .map(v => Number(v));
-          let yMin = values.length ? Math.min(...values) : 0;
-          let yMax = values.length ? Math.max(...values) : 1;
+          let yMin = 0, yMax = 1;
+          if (values.length) {
+            yMin = values[0]; yMax = values[0];
+            for (let k = 1; k < values.length; k++) {
+              if (values[k] < yMin) yMin = values[k];
+              if (values[k] > yMax) yMax = values[k];
+            }
+          }
           const padding = (yMax - yMin) * 0.1;
           if (padding === 0) { yMin -= 1; yMax += 1; }
           else { yMin -= padding; yMax += padding; }
@@ -1321,11 +1330,11 @@
         type: 'category',
         data: timeLabels,
         gridIndex: n,
-        axisLine: { show: true, onZero: false, lineStyle: { color: axisColor } },
-        axisTick: { show: true, lineStyle: { color: axisColor } },
+        axisLine: { show: true, onZero: false, lineStyle: { color: tc.axisLine } },
+        axisTick: { show: true, lineStyle: { color: tc.axisLine } },
         axisLabel: {
           show: true,
-          color: labelColor,
+          color: tc.xLabel,
           rotate: timeLabels.length > 20 ? 45 : 0,
           fontSize: 10,
         },
@@ -1346,7 +1355,7 @@
       const allXAxisIndices = Array.from({ length: n + 1 }, (_, idx) => idx);
 
       return {
-        backgroundColor: isDark ? '#111827' : '#ffffff',
+        backgroundColor: tc.bg,
         tooltip: {
           show: true,
           trigger: 'axis',
@@ -1386,15 +1395,16 @@
         })
         .filter(d => d !== null);
 
+      const tc = getThemeColors();
       return {
-        backgroundColor: isDark ? '#111827' : 'transparent',
+        backgroundColor: isDark ? tc.bg : 'transparent',
         tooltip: {
           trigger: 'item',
           formatter: (params) => `${xVar}: ${params.data[0]}<br/>${yVar}: ${params.data[1]}`,
         },
         grid: { left: '3%', right: '4%', bottom: '3%', top: '3%', containLabel: true },
-        xAxis: { type: 'value', name: xVar, nameLocation: 'center', nameGap: 25, nameTextStyle: { fontSize: 11, color: isDark ? '#d1d5db' : '#333' }, axisLabel: { color: isDark ? '#d1d5db' : '#333' }, splitLine: { lineStyle: { color: isDark ? '#374151' : '#eee' } } },
-        yAxis: { type: 'value', name: yVar, nameLocation: 'center', nameGap: 30, nameRotate: 90, nameTextStyle: { fontSize: 11, color: isDark ? '#d1d5db' : '#333' }, axisLabel: { color: isDark ? '#d1d5db' : '#333' }, splitLine: { lineStyle: { color: isDark ? '#374151' : '#eee' } } },
+        xAxis: { type: 'value', name: xVar, nameLocation: 'center', nameGap: 25, nameTextStyle: { fontSize: 11, color: tc.text }, axisLabel: { color: tc.text }, splitLine: { lineStyle: { color: tc.splitLine } } },
+        yAxis: { type: 'value', name: yVar, nameLocation: 'center', nameGap: 30, nameRotate: 90, nameTextStyle: { fontSize: 11, color: tc.text }, axisLabel: { color: tc.text }, splitLine: { lineStyle: { color: tc.splitLine } } },
         series: [{ type: 'scatter', data: scatterData, symbolSize: 4 }],
       };
     }
@@ -1413,14 +1423,15 @@
         })
         .filter(d => d !== null);
 
+      const tc = getThemeColors();
       return {
-        backgroundColor: isDark ? '#111827' : 'transparent',
+        backgroundColor: isDark ? tc.bg : 'transparent',
         tooltip: {
           formatter: (params) => `${xVar}: ${params.data[0]}<br/>${yVar}: ${params.data[1]}<br/>${zVar}: ${params.data[2]}`,
         },
-        xAxis3D: { type: 'value', name: xVar, nameTextStyle: { fontSize: 11, color: isDark ? '#d1d5db' : '#333' }, axisLabel: { color: isDark ? '#d1d5db' : '#333' } },
-        yAxis3D: { type: 'value', name: yVar, nameTextStyle: { fontSize: 11, color: isDark ? '#d1d5db' : '#333' }, axisLabel: { color: isDark ? '#d1d5db' : '#333' } },
-        zAxis3D: { type: 'value', name: zVar, nameTextStyle: { fontSize: 11, color: isDark ? '#d1d5db' : '#333' }, axisLabel: { color: isDark ? '#d1d5db' : '#333' } },
+        xAxis3D: { type: 'value', name: xVar, nameTextStyle: { fontSize: 11, color: tc.text }, axisLabel: { color: tc.text } },
+        yAxis3D: { type: 'value', name: yVar, nameTextStyle: { fontSize: 11, color: tc.text }, axisLabel: { color: tc.text } },
+        zAxis3D: { type: 'value', name: zVar, nameTextStyle: { fontSize: 11, color: tc.text }, axisLabel: { color: tc.text } },
         grid3D: {
           boxWidth: 200, boxDepth: 80,
           viewControl: { autoRotate: false },
