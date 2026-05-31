@@ -1259,6 +1259,15 @@
       return null;
     }
 
+    const BIT_COLORS = [
+      '#3b82f6', '#22c55e', '#f59e0b', '#ef4444',
+      '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16',
+    ];
+
+    function getBitColor(bit) {
+      return BIT_COLORS[bit % BIT_COLORS.length];
+    }
+
     function buildTimeSeriesOption() {
       const { rows, timeColumn } = data;
       const timeLabels = rows.map(row => {
