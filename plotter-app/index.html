@@ -953,7 +953,7 @@
           item.className = 'var-item' + (isSelected ? ' selected' : '');
           if (isBinary) item.setAttribute('data-binary', '');
 
-          // Build right-side content (binary indicator + dot)
+          // Build right-side content (binary dot + toggle)
           let rightContent = '';
           if (isBinary) {
             const disabledAttr = isMerged ? 'disabled' : '';
@@ -961,15 +961,12 @@
             const binActive = binMode === 'bin' ? 'active' : '';
             const titleText = isMerged ? '切换至分图模式可用' : '';
             rightContent = `
-              <span class="bin-badge" ${isMerged ? 'title="切换至分图模式可用"' : ''}>BIN</span>
+              <div class="dot"></div>
               <div class="bin-toggle">
                 <button class="${decActive}" ${disabledAttr} title="${titleText}" data-bin-mode="dec">DEC</button>
                 <button class="${binActive}" ${disabledAttr} title="${titleText}" data-bin-mode="bin">BIN</button>
               </div>
             `;
-          }
-          if (isSelected) {
-            rightContent += '<div class="dot"></div>';
           }
 
           item.innerHTML = `
@@ -1417,7 +1414,7 @@
               axisLine: { show: true, onZero: false, lineStyle: { color: tc.axisLine } },
               axisTick: { show: true, lineStyle: { color: tc.axisLine } },
               axisLabel: { show: false },
-              splitLine: { show: true, lineStyle: { color: tc.splitLine, type: 'dashed' } },
+              splitLine: { show: false },
               min: 0,
               max: 1.2,
               scale: false,
