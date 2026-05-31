@@ -374,6 +374,8 @@
       border-radius: 4px; transition: all 0.1s;
     }
     .bin-toggle button.active { background: var(--accent); color: white; }
+    .bin-toggle button[data-bin-mode="bin"].active { background: #22c55e; }
+    [data-theme="dark"] .bin-toggle button[data-bin-mode="bin"].active { background: #16a34a; }
     .bin-toggle button:disabled { opacity: 0.35; cursor: not-allowed; }
     .bin-toggle button:not(:disabled):not(.active):hover { opacity: 0.7; }
     .var-item[data-binary] { background: #f0fdf4; }
