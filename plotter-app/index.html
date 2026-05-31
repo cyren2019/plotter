@@ -665,7 +665,7 @@
           row[headers[j]] = normalizeValue(j < fields.length ? fields[j] : '');
         }
         rawRows.push(row);
-        if (i <= 11) sampleRows.push(row); // rows 1-11 (indices 1-11 of lines)
+        if (i <= 10) sampleRows.push(row); // rows 1-10 (first 10 data rows)
       }
       const timeColumn = headers[0] || '';
       const timeFormat = detectColumnFormat(timeColumn, sampleRows);
@@ -717,10 +717,48 @@
     // ===================== Utilities =====================
     function debounce(fn, delay) {
       let timer = null;
-      return function(...args) {
+      function debounced(...args) {
         clearTimeout(timer);
         timer = setTimeout(() => fn.apply(this, args), delay);
-      };
+      }
+      debounced.cancel = () => { clearTimeout(timer); timer = null; };
+      return debounced;
+    }
+
+    function saveZoomState() {
+      if (chartInstance && !restoreZoom) {
+        try {
+          const opt = chartInstance.getOption();
+          if (opt && opt.dataZoom && opt.dataZoom.length > 0) {
+            restoreZoom = { start: opt.dataZoom[0].start, end: opt.dataZoom[0].end };
+          }
+        } catch (e) { /* ignore */ }
+      }
+    }
+
+    function computeValueRanges(parsed) {
+      const ranges = {};
+      for (const h of parsed.headers) {
+        if (h === parsed.timeColumn) continue;
+        let min = Infinity, max = -Infinity;
+        for (const row of parsed.rows) {
+          const v = row[h];
+          if (v === null || v === undefined || isNaN(Number(v)) || !isFinite(Number(v))) continue;
+          const n = Number(v);
+          if (n < min) min = n;
+          if (n > max) max = n;
+        }
+        if (min !== Infinity) {
+          ranges[h] = { min, max };
+        }
+      }
+      return ranges;
+    }
+
+    function getBinToggleTitle(varName, binDisabled) {
+      if (binDisabled) return '仅在时序图分图模式下可用';
+      const mode = binaryMode.get(varName) || 'dec';
+      return mode === 'bin' ? '切换至十进制' : '切换至二进制';
     }
     // ===================== Binary Columns =====================
     let binaryColumns = new Set();      // column names detected as binary
@@ -801,21 +839,7 @@
           binaryMode.set(col, 'dec');
         }
         // Cache value ranges per column (used in non-auto-scale separate mode)
-        data.valueRanges = {};
-        for (const h of parsed.headers) {
-          if (h === parsed.timeColumn) continue;
-          let min = Infinity, max = -Infinity;
-          for (const row of parsed.rows) {
-            const v = row[h];
-            if (v === null || v === undefined || isNaN(Number(v)) || !isFinite(Number(v))) continue;
-            const n = Number(v);
-            if (n < min) min = n;
-            if (n > max) max = n;
-          }
-          if (min !== Infinity) {
-            data.valueRanges[h] = { min, max };
-          }
-        }
+        data.valueRanges = computeValueRanges(parsed);
         fileName.textContent = file.name;
         const nonTime = parsed.headers.filter(h => h !== parsed.timeColumn);
         selectedVars = nonTime.slice(0, 3);
@@ -865,6 +889,8 @@
         }
       }
       binaryMode.set(varName, mode);
+      // Preserve zoom state before targeted re-render
+      saveZoomState();
       // Targeted update: toggle the single var-item state + re-render chart
       updateSingleVarItemState(varName);
       updateSelectedCountBadge();
@@ -873,7 +899,12 @@
     }
 
     // ===================== Render App =====================
+    let activeFilterFn = null; // track current debounced filter for cancellation
     function renderApp() {
+      // Cancel any pending debounced search filter from previous render
+      if (activeFilterFn && activeFilterFn.cancel) activeFilterFn.cancel();
+      activeFilterFn = null;
+
       if (!data) {
         mainArea.innerHTML = '';
         mainArea.appendChild(emptyState);
@@ -964,6 +995,8 @@
         data.rows = processRows(data.headers, data.rawRows, newTimeColumn);
         data.timeColumn = newTimeColumn;
         data.timeFormat = detectColumnFormat(newTimeColumn, data.rows);
+        // Recompute value ranges (old time column is now a data column)
+        data.valueRanges = computeValueRanges(data);
 
         renderApp();
       });
@@ -1000,7 +1033,7 @@
           if (isBinary) {
             const disabledAttr = binDisabled ? 'disabled' : '';
             const activeClass = binMode === 'bin' ? 'active' : '';
-            const titleText = binDisabled ? '仅在时序图分图模式下可用' : (binMode === 'bin' ? '切换至十进制' : '切换至二进制');
+            const titleText = getBinToggleTitle(v, binDisabled);
             rightContent = `
               <button class="bin-toggle ${activeClass}" ${disabledAttr} title="${titleText}">BIN</button>
             `;
@@ -1031,6 +1064,8 @@
               }
               selectedVars.push(v);
             }
+            // Preserve zoom state before targeted re-render
+            saveZoomState();
             // Targeted update: toggle class, update badge, re-render chart only
             item.classList.toggle('selected', selectedVars.includes(v));
             updateSelectedCountBadge();
@@ -1059,7 +1094,7 @@
       renderVars();
 
       // CSS visibility-based search filter (no DOM recreation)
-      const filterVarItems = debounce((filterText) => {
+      const applyVarFilter = (filterText) => {
         const lower = filterText.toLowerCase().trim();
         const items = varList.querySelectorAll('.var-item');
         let visibleCount = 0;
@@ -1084,7 +1119,9 @@
         } else if (emptyEl) {
           emptyEl.style.display = 'none';
         }
-      }, 150);
+      };
+      const filterVarItems = debounce(applyVarFilter, 150);
+      activeFilterFn = filterVarItems;
       sidebar.querySelector('#' + searchId).addEventListener('input', (e) => {
         filterVarItems(e.target.value);
       });
@@ -1094,6 +1131,8 @@
         for (const col of binaryColumns) {
           binaryMode.set(col, 'dec');
         }
+        // Preserve zoom state before targeted re-render
+        saveZoomState();
         // Clear all .selected and .bin-active classes on existing DOM
         varList.querySelectorAll('.var-item').forEach(el => {
           el.classList.remove('selected', 'bin-active');
@@ -1115,7 +1154,7 @@
           <button class="btn ${plotType === 'xy' ? 'active' : ''}" data-type="xy">XY图</button>
           <button class="btn ${plotType === 'xyz' ? 'active' : ''}" data-type="xyz">XYZ图</button>
           <div style="display: ${tsToggleVisible ? 'flex' : 'none'}; align-items: center; gap: 4px; margin-left: auto;">
-            <div class="ts-toggle" style="display: ${timeSeriesMode === 'separate' ? 'flex' : 'none'}">
+            <div class="ts-toggle" data-ts="auto-scale" style="display: ${timeSeriesMode === 'separate' ? 'flex' : 'none'}">
               <button class="btn ${separateAutoScale ? 'active' : ''}" data-auto-scale="toggle">自适应</button>
             </div>
             <div class="ts-toggle">
@@ -1167,8 +1206,8 @@
               b.classList.toggle('active', b.dataset.mode === timeSeriesMode);
             });
           }
-          // Show/hide auto-scale button
-          const autoScaleToggle = plotSection.querySelector('.ts-toggle:first-of-type');
+          // Show/hide auto-scale button (use data attribute, not positional selector)
+          const autoScaleToggle = plotSection.querySelector('.ts-toggle[data-ts="auto-scale"]');
           if (autoScaleToggle) {
             autoScaleToggle.style.display = timeSeriesMode === 'separate' ? 'flex' : 'none';
           }
@@ -1177,6 +1216,8 @@
           // Update mode label
           const label = plotSection.querySelector('.plot-label span');
           if (label) label.textContent = getModeLabel();
+          // Preserve zoom state before re-render
+          saveZoomState();
           renderChart();
         });
       });
@@ -1248,11 +1289,11 @@
 
       mainArea.appendChild(plotSection);
 
-      // Restore search value and re-filter after re-rendering
+      // Restore search value and re-filter using CSS visibility (preserves all DOM elements)
       const newSearchInput = sidebar.querySelector('#' + searchId);
       if (newSearchInput && savedSearchValue) {
         newSearchInput.value = savedSearchValue;
-        renderVars(savedSearchValue);
+        applyVarFilter(savedSearchValue);
       }
 
       // Restore scroll position of var-list after re-rendering
@@ -1318,7 +1359,7 @@
             btn.classList.toggle('active', binMode === 'bin');
             const binDisabled = plotType !== 'time-series' || timeSeriesMode === 'merged';
             btn.disabled = binDisabled;
-            btn.title = binDisabled ? '仅在时序图分图模式下可用' : (binMode === 'bin' ? '切换至十进制' : '切换至二进制');
+            btn.title = getBinToggleTitle(varName, binDisabled);
           }
         }
       });
@@ -1329,26 +1370,12 @@
       const binDisabled = plotType !== 'time-series' || timeSeriesMode === 'merged';
       items.forEach(el => {
         const btn = el.querySelector('.bin-toggle');
+        const varName = el.querySelector('.name')?.textContent || '';
         if (btn) {
           btn.disabled = binDisabled;
-          btn.title = binDisabled ? '仅在时序图分图模式下可用' : (btn.classList.contains('active') ? '切换至十进制' : '切换至二进制');
+          btn.title = getBinToggleTitle(varName, binDisabled);
         }
       });
-    }
-
-    function updateMaxSelectableText() {
-      const container = document.querySelector('.selected-count');
-      if (!container) return;
-      const existing = container.querySelector('.max-text');
-      if (existing) existing.remove();
-      const max = getMaxSelectable();
-      if (max !== Infinity) {
-        const span = document.createElement('span');
-        span.className = 'max-text';
-        span.style.cssText = 'opacity:0.5';
-        span.textContent = '（最多 ' + max + ' 个）';
-        container.appendChild(span);
-      }
     }
 
     // ===================== Chart Rendering =====================
@@ -1372,6 +1399,10 @@
 
       const msg = getChartMessage();
       if (msg) {
+        // Clear chart canvas so old data doesn't show behind the message
+        if (chartInstance) {
+          try { chartInstance.clear(); } catch (e) { /* ignore */ }
+        }
         msgEl.style.display = 'flex';
         msgEl.querySelector('p')?.remove();
         const p = document.createElement('p');
