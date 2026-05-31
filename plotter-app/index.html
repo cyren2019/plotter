@@ -491,19 +491,21 @@
 
         let maxVal = 0;
         let isPositiveInt = true;
+        let hasValue = false;
 
         for (const row of rows) {
           const v = row[h];
           if (v === null || v === undefined) continue;
           const n = Number(v);
-          if (!Number.isInteger(n) || n < 0 || !Number.isFinite(n)) {
+          hasValue = true;
+          if (!Number.isInteger(n) || n < 0) {
             isPositiveInt = false;
             break;
           }
           if (n > maxVal) maxVal = n;
         }
 
-        if (isPositiveInt && maxVal <= 65536) {
+        if (hasValue && isPositiveInt && maxVal < 65536) {
           cols.add(h);
           bits.set(h, maxVal <= 255 ? 8 : 16);
         }
