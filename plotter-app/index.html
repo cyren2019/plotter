@@ -1214,9 +1214,18 @@
       // Pre-set container height before init to ensure correct canvas size
       // Must match constants in buildTimeSeriesOption() separate mode
       if (plotType === 'time-series' && timeSeriesMode === 'separate') {
-        const n = Math.min(selectedVars.length, 10);
-        const rowHeight = 200, labelHeight = 10, gap = 20, topPad = 8, bottomGap = 8;
-        const totalHeight = topPad + n * (rowHeight + labelHeight) + (n - 1) * gap + bottomGap;
+        const varsToPlot = selectedVars.slice(0, 10);
+        const rowHeight = 200, rowHeightBit = 25, labelHeight = 10, gap = 20, topPad = 8, bottomGap = 8;
+        let totalHeight = topPad;
+        for (let i = 0; i < varsToPlot.length; i++) {
+          const v = varsToPlot[i];
+          const isBinVar = binaryColumns.has(v) && binaryMode.get(v) === 'bin';
+          const bitCount = isBinVar ? (binaryBits.get(v) || 8) : 0;
+          totalHeight += isBinVar ? (bitCount * rowHeightBit) : rowHeight;
+          totalHeight += labelHeight;
+          if (i < varsToPlot.length - 1) totalHeight += gap;
+        }
+        totalHeight += bottomGap;
         container.style.height = totalHeight + 'px';
       } else {
         container.style.height = '100%';
@@ -1355,8 +1364,6 @@
       const topPad = 8;
       const labelHeight = 10;
       const bottomGap = 8;
-
-      const n = varsToPlot.length;
 
       const grids = [];
       const graphics = [];
