@@ -655,6 +655,10 @@
     let restoreZoom = null; // { start, end } — preserved dataZoom state across re-renders
     let chartInstance = null;
     let dragCounter = 0;
+    // ===================== Binary Columns =====================
+    let binaryColumns = new Set();      // column names detected as binary
+    let binaryBits = new Map();         // column name → bit count (8 or 16)
+    let binaryMode = new Map();         // column name → 'dec' | 'bin'
 
     // ===================== DOM Elements =====================
     const app = document.getElementById('app');
