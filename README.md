@@ -1,74 +1,76 @@
-# 📈 Plotter — 时序数据绘图工具
+[中文](README_zh-CN.md)
 
-一个基于浏览器的轻量级数据可视化工具，支持 CSV 与 Excel 文件导入，自动生成**时序图**、**XY 散点图**与 **XYZ 3D 散点图**。零构建、零依赖运行时，打开即用。
+# 📈 Plotter — Time-Series Data Visualization Tool
+
+A browser-based lightweight data visualization tool supporting CSV and Excel file imports. Automatically generates **time-series charts**, **XY scatter plots**, and **XYZ 3D scatter plots**. Zero build steps, zero runtime dependencies — open and go.
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 ---
 
-## ✨ 特性
+## ✨ Features
 
-### 多格式导入
-- **CSV** 文件（自动识别 `,` / `;` 分隔符，支持引号字段转义）
-- **Excel** `.xls` / `.xlsx` 文件
-- **日志/文本** `.log` / `.txt` 文件
-- 中文编码自动检测（UTF-8 → GB18030/GBK/GB2312 回退）
+### Multi-Format Import
+- **CSV** files (auto-detects `,` / `;` delimiters, supports quoted field escaping)
+- **Excel** `.xls` / `.xlsx` files
+- **Log/Text** `.log` / `.txt` files
+- Chinese encoding auto-detection (UTF-8 → GB18030/GBK/GB2312 fallback)
 
-### 智能时间解析
-- 自动识别第一列为时间轴，支持 **20+ 种时间格式**
-- 包括 ISO 8601、Excel 序列号、中文日期（`2024年1月1日`）、紧凑格式（`YYYYMMDDHHmmss`）等
-- 支持毫秒级精度与 `HH时mm分ss秒` 中文时间表达
+### Smart Time Parsing
+- Auto-detects the first column as the time axis, supporting **20+ time formats**
+- Includes ISO 8601, Excel serial numbers, Chinese dates (`2024年1月1日`), compact formats (`YYYYMMDDHHmmss`), and more
+- Millisecond precision and Chinese time expressions (`HH时mm分ss秒`)
 
-### 三种图表模式
+### Three Chart Modes
 
-| 模式 | 说明 | 变量数 |
-|------|------|--------|
-| **时序图 · 合并** | 所有变量绘制在同一图表，共用 Y 轴 | 1–10 |
-| **时序图 · 分图** | 每变量独立子图，独立 Y 轴，支持框选缩放 | 1–10 |
-| **XY 散点图** | 双变量二维散点 | 2 |
-| **XYZ 3D 图** | 三变量三维散点（需 echarts-gl） | 3 |
+| Mode | Description | Variables |
+|------|-------------|-----------|
+| **Time-Series · Merged** | All variables in one chart, shared Y-axis | 1–10 |
+| **Time-Series · Separate** | Independent subplot per variable, individual Y-axis with area zoom | 1–10 |
+| **XY Scatter** | Two-variable 2D scatter | 2 |
+| **XYZ 3D** | Three-variable 3D scatter (requires echarts-gl) | 3 |
 
-### 交互操作
-- 🖱️ 滚轮 / 拖拽缩放、平移
-- 🔄 双击图表复位缩放
-- 📐 分图模式支持框选区域缩放
-- 🌗 明暗主题实时切换
-- 🔍 变量搜索、批量取消选择
-- ↔️ 侧边栏宽度可拖拽调整
-- ⏱️ 手动切换时间轴列
+### Interactions
+- 🖱️ Scroll / drag to zoom and pan
+- 🔄 Double-click chart to reset zoom
+- 📐 Area selection zoom in separate mode
+- 🌗 Light/dark theme toggle
+- 🔍 Variable search and batch deselect
+- ↔️ Draggable sidebar width
+- ⏱️ Manual time column switching
 
-### 二进制变量识别与按位拆分
-- **自动检测**：自动识别正整数列（max ≤ 65536），标记为可拆分变量
-- **8/16 位自适应**：≤255 展开为 8 位，256~65535 展开为 16 位
-- **DEC/BIN 切换**：分图模式下可一键切换十进制/二进制显示
-- **按位分行**：每个 bit 独立一行（bitN-1 → bit0 从上到下），类似逻辑分析仪
-- **彩色编码**：8 色循环赋值，不同 bit 以不同颜色区分
-- **增强 tooltip**：悬停任意 bit 曲线时，显示所有 bit 的完整状态，当前 bit 高亮加粗
-- **合并模式保护**：切换到合并模式时自动重置为十进制显示
+### Binary Variable Detection & Bit-Level Visualization
+- **Auto-detection**: Automatically identifies positive integer columns (max ≤ 65536) as splittable variables
+- **8/16-bit Adaptive**: ≤255 expands to 8 bits, 256–65535 expands to 16 bits
+- **DEC/BIN Toggle**: One-click switch between decimal and binary display in separate mode
+- **Per-Bit Rows**: Each bit in its own row (bitN-1 → bit0, top to bottom), similar to a logic analyzer
+- **Color-Coded**: 8-color cycle assignment for visual distinction between bits
+- **Enhanced Tooltip**: Hovering any bit curve shows the complete state of all bits, with the current bit highlighted and bold
+- **Merged Mode Protection**: Auto-resets to decimal display when switching to merged mode
 
-### 时序图分图模式
-- **自适应 Y 轴**：自动根据可见数据范围调整刻度（`scale: true`）
-- **固定 Y 轴**：基于全局数据范围锁定刻度
-- **图像复位**：一键恢复初始缩放范围
-- **缩放记忆**：切换变量/模式时保留当前缩放位置
+### Time-Series Separate Mode
+- **Auto-scale Y-axis**: Dynamically adjusts scale based on visible data range (`scale: true`)
+- **Fixed Y-axis**: Locks scale based on global data range
+- **View Reset**: One-click restore to initial zoom range
+- **Zoom Memory**: Preserves current zoom position when switching variables/modes
 
 ---
 
-## 🚀 快速开始
+## 🚀 Quick Start
 
-### 方式一：静态服务器（推荐）
+### Option 1: Static Server (Recommended)
 
 ```bash
 cd plotter-app
 python -m http.server 8080
-# 浏览器打开 http://localhost:8080
+# Open http://localhost:8080 in your browser
 ```
 
-### 方式二：直接打开
+### Option 2: Direct Open
 
-直接在浏览器中拖入 `plotter-app/index.html` 文件即可使用（部分浏览器可能因安全策略限制文件读取，建议使用静态服务器）。
+Drag `plotter-app/index.html` directly into your browser (some browsers may restrict file access due to security policies; using a static server is recommended).
 
-### 方式三：任意 HTTP 服务器
+### Option 3: Any HTTP Server
 
 ```bash
 # Node.js
@@ -83,66 +85,67 @@ python3 -m http.server 8080 -d plotter-app
 
 ---
 
-## 📖 使用说明
+## 📖 Usage
 
-1. **导入数据** — 拖放文件到页面，或点击右上角「导入」按钮
-2. **选择时间列** — 左侧栏顶部下拉菜单选择作为时间轴的列
-3. **选择变量** — 勾选需要绘制的变量名
-4. **切换图表** — 顶部标签栏切换 时序图 / XY图 / XYZ图
-5. **时序图模式** — 右侧「合并 / 分图」切换显示方式
-6. **主题切换** — 右上角「明亮 / 黑暗」按钮
+1. **Import Data** — Drag and drop a file onto the page, or click the "Import" button in the top-right corner
+2. **Select Time Column** — Use the dropdown at the top of the sidebar to choose the time axis column
+3. **Select Variables** — Check the variable names you want to plot
+4. **Switch Chart Type** — Use the top tabs to switch between Time-Series / XY / XYZ
+5. **Time-Series Mode** — Toggle between "Merged" and "Separate" display on the right
+6. **Theme Toggle** — Use the "Light / Dark" button in the top-right corner
 
 ---
 
-## 📁 项目结构
+## 📁 Project Structure
 
 ```
 plotter/
 ├── plotter-app/
-│   ├── index.html          # 完整应用（HTML + CSS + JS，约 1700 行）
-│   ├── lib/                # 第三方库（CDN 离线化）
-│   │   ├── dayjs.min.js            # 日期解析 (v1.x)
-│   │   ├── customParseFormat.js    # dayjs 严格解析插件
-│   │   ├── xlsx.full.min.js        # Excel 解析 (SheetJS)
-│   │   ├── echarts.min.js          # 图表引擎 (Apache ECharts)
-│   │   └── echarts-gl.min.js       # 3D 图表扩展
-│   └── public/             # 静态资源
+│   ├── index.html          # Full application (HTML + CSS + JS, ~1700 lines)
+│   ├── lib/                # Third-party libraries (offline CDN copies)
+│   │   ├── dayjs.min.js            # Date parsing (v1.x)
+│   │   ├── customParseFormat.js    # dayjs strict format plugin
+│   │   ├── xlsx.full.min.js        # Excel parsing (SheetJS)
+│   │   ├── echarts.min.js          # Chart engine (Apache ECharts)
+│   │   └── echarts-gl.min.js       # 3D chart extension
+│   └── public/             # Static assets
 │       ├── favicon.svg
 │       └── icons.svg
 ├── .gitignore
-└── README.md
+├── README.md
+└── README_zh-CN.md
 ```
 
 ---
 
-## 🏗️ 技术架构
+## 🏗️ Architecture
 
-| 层面 | 方案 |
-|------|------|
-| **架构** | 单文件 SPA（Single Page Application），无构建步骤 |
-| **状态管理** | 全局变量（`data`, `selectedVars`, `plotType`, `timeSeriesMode`, `binaryColumns`, `binaryBits`, `binaryMode`） |
-| **渲染模式** | `renderApp()` 全量重建 DOM → `renderChart()` 销毁并重建 ECharts 实例 |
-| **时间解析** | 双阶段：dayjs 原生解析 → 20+ 格式严格匹配 → 宽松匹配兜底 |
-| **CSV 解析** | 自定义解析器，支持引号转义、分隔符自动检测、编码回退 |
-| **Excel 解析** | SheetJS (`xlsx.full.min.js`)，读取首个 Sheet |
-| **图表引擎** | Apache ECharts 5.x + echarts-gl（3D 支持） |
+| Layer | Approach |
+|-------|----------|
+| **Architecture** | Single-file SPA (Single Page Application), no build steps |
+| **State Management** | Global variables (`data`, `selectedVars`, `plotType`, `timeSeriesMode`, `binaryColumns`, `binaryBits`, `binaryMode`) |
+| **Rendering** | `renderApp()` full DOM rebuild → `renderChart()` dispose + re-init ECharts instance |
+| **Time Parsing** | Two-stage: dayjs native parsing → 20+ format strict matching → loose fallback |
+| **CSV Parsing** | Custom parser with quote escaping, delimiter auto-detection, encoding fallback |
+| **Excel Parsing** | SheetJS (`xlsx.full.min.js`), reads the first sheet |
+| **Chart Engine** | Apache ECharts 5.x + echarts-gl (3D support) |
 
-### 数据流
-
-```
-文件导入 → 编码检测 → CSV/Excel 解析 → 时间列自动识别
-    → 变量列表渲染 → 用户选择 → ECharts 图表生成
-```
-
-### 编码回退策略
+### Data Flow
 
 ```
-UTF-8 (strict) → GB18030 (兼容 GBK/GB2312) → UTF-8 (lenient)
+File Import → Encoding Detection → CSV/Excel Parsing → Time Column Auto-Detection
+    → Variable List Rendering → User Selection → ECharts Chart Generation
+```
+
+### Encoding Fallback Strategy
+
+```
+UTF-8 (strict) → GB18030 (compatible with GBK/GB2312) → UTF-8 (lenient)
 ```
 
 ---
 
-## 🌐 浏览器支持
+## 🌐 Browser Support
 
 | Chrome | Edge | Firefox | Safari |
 |--------|------|---------|--------|
@@ -150,36 +153,36 @@ UTF-8 (strict) → GB18030 (兼容 GBK/GB2312) → UTF-8 (lenient)
 
 ---
 
-## 📝 开发指南
+## 📝 Development Guide
 
-本项目无需构建工具链，直接编辑源文件即可：
+This project requires no build toolchain — edit the source file directly:
 
 ```bash
-# 编辑 index.html 后刷新浏览器即生效
+# Edit index.html, then refresh your browser — changes take effect immediately
 ```
 
-关键函数：
-- `parseTime()` — 时间字符串解析，支持 20+ 格式
-- `parseCSV()` / `parseExcel()` — 文件解析入口
-- `renderApp()` — DOM 全量渲染
-- `renderChart()` — ECharts 实例创建与配置
-- `buildTimeSeriesOption()` — 时序图配置生成（合并/分图）
-- `buildXYOption()` / `buildXYZOption()` — 散点图配置生成
-- `detectBinaryColumns()` — 二进制变量自动检测
-- `getBitColor()` / `setBinaryMode()` — 按位拆分颜色与模式切换
+Key functions:
+- `parseTime()` — Time string parsing, 20+ format support
+- `parseCSV()` / `parseExcel()` — File parsing entry points
+- `renderApp()` — Full DOM rendering
+- `renderChart()` — ECharts instance creation and configuration
+- `buildTimeSeriesOption()` — Time-series chart option generation (merged/separate)
+- `buildXYOption()` / `buildXYZOption()` — Scatter plot option generation
+- `detectBinaryColumns()` — Binary variable auto-detection
+- `getBitColor()` / `setBinaryMode()` — Bit-level color assignment and mode toggle
 
 ---
 
-## 📄 许可证
+## 📄 License
 
 MIT
 
 ---
 
-## 🙏 致谢
+## 🙏 Acknowledgments
 
-- [Apache ECharts](https://echarts.apache.org/) — 图表渲染引擎
-- [dayjs](https://day.js.org/) — 轻量日期解析库
-- [SheetJS](https://sheetjs.com/) — Excel 文件解析
+- [Apache ECharts](https://echarts.apache.org/) — Chart rendering engine
+- [dayjs](https://day.js.org/) — Lightweight date parsing library
+- [SheetJS](https://sheetjs.com/) — Excel file parsing
 - [openCode](https://github.com/anomalyco/opencode)
 - [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent)
