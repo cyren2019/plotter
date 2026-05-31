@@ -756,10 +756,10 @@
       return isDark
         ? { bg: '#111827', text: '#d1d5db', textMuted: '#9ca3af', heading: '#f9fafb',
             splitLine: '#374151', axisLine: '#999', gridBg: 'rgba(255,255,255,0.03)',
-            gridBorder: '#374151', yLabel: '#d1d5db', xLabel: '#d1d5db' }
+            gridBorder: '#374151', yLabel: '#d1d5db', xLabel: '#d1d5db', subplotLabel: '#9ca3af' }
         : { bg: '#ffffff', text: '#333', textMuted: '#999', heading: '#111827',
             splitLine: '#eee', axisLine: '#999', gridBg: 'rgba(128,128,128,0.05)',
-            gridBorder: '#e5e7eb', yLabel: '#333', xLabel: '#666' };
+            gridBorder: '#e5e7eb', yLabel: '#333', xLabel: '#666', subplotLabel: '#888' };
     }
     function showError(msg) {
       errorText.textContent = msg;
@@ -1423,7 +1423,7 @@
               nameRotate: 0,
               nameTextStyle: {
                 fontSize: 10,
-                color: tc.text,
+                color: tc.subplotLabel,
               },
               axisLine: { show: false },
               axisTick: { show: false },
@@ -1431,7 +1431,7 @@
                 show: true,
                 formatter: value => value === 0 ? '0' : '',
                 fontSize: 10,
-                color: tc.text,
+                color: tc.subplotLabel,
                 margin: 2,
               },
               splitLine: { show: false },
@@ -1466,7 +1466,7 @@
             top: cumulativeTop + 4,
             style: {
               text: variable,
-              fill: isDark ? '#f9fafb' : '#111827',
+              fill: tc.subplotLabel,
               font: 'bold 12px sans-serif',
             },
           });
@@ -1508,7 +1508,7 @@
             show: true,
             axisLine: { show: true, onZero: false, lineStyle: { color: tc.axisLine } },
             axisTick: { show: true, lineStyle: { color: tc.axisLine } },
-            axisLabel: { show: true, color: tc.yLabel, fontSize: 10, formatter: v => Number(v).toFixed(1) },
+            axisLabel: { show: true, color: tc.subplotLabel, fontSize: 10, formatter: v => Number(v).toFixed(1) },
             splitLine: { show: true, lineStyle: { color: tc.splitLine, type: 'dashed' } },
           };
 
@@ -1557,7 +1557,7 @@
             top: gridTop + rowHeight + 4,
             style: {
               text: variable,
-              fill: isDark ? '#f9fafb' : '#111827',
+              fill: tc.subplotLabel,
               font: 'bold 12px sans-serif',
             },
           });
