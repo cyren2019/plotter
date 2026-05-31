@@ -1564,6 +1564,27 @@
           formatter: (params) => {
             const idx = params[0]?.dataIndex;
             const title = idx != null ? formatTooltipTime(idx) : '';
+            // Binary bit series: show all bits with hovered bit highlighted
+            const bitMatch = params[0]?.seriesName?.match(/^(.+) · bit(\d+)$/);
+            if (bitMatch && idx != null) {
+              const varName = bitMatch[1];
+              const hoveredBit = parseInt(bitMatch[2], 10);
+              const row = rows[idx];
+              const rawVal = row ? Number(row[varName]) : 0;
+              const val = (rawVal === null || rawVal === undefined || isNaN(rawVal) || !isFinite(rawVal)) ? 0 : rawVal;
+              let lines = title + '<br/><span style="font-weight:bold;color:#4f46e5">' + varName + ' = ' + val + '</span>';
+              const bitCount = binaryBits.get(varName) || 8;
+              for (let b = bitCount - 1; b >= 0; b--) {
+                const bitVal = (val >> b) & 1;
+                const color = getBitColor(b);
+                const marker = '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + color + ';vertical-align:middle;margin-right:4px;"></span>';
+                const label = marker + 'bit' + b + ': ' + bitVal;
+                lines += b === hoveredBit
+                  ? '<br/><span style="font-weight:bold;font-size:13px">' + label + '</span>'
+                  : '<br/><span style="opacity:0.5">' + label + '</span>';
+              }
+              return lines;
+            }
             return title + '<br/>' + params.map(p => p.marker + ' ' + p.seriesName + ': ' + (p.value ?? '-')).join('<br/>');
           },
         },
