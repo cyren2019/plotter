@@ -1357,14 +1357,9 @@
       const labelHeight = 10;
       const bottomGap = 8;
 
-      // Calculate total height
-      let totalHeight = topPad;
-      for (const v of varLayout) {
-        totalHeight += v.rowCount * (v.isBinVar ? rowHeightBit : rowHeight);
-        totalHeight += labelHeight;
-      }
-      // Gap between variable blocks (not between individual bits)
-      totalHeight += (varLayout.length - 1) * gap + bottomGap + xAxisHeight;
+      // Total height based on original layout (stable — bottom axis position doesn't shift)
+      const n = varsToPlot.length;
+      const totalHeight = topPad + n * (rowHeight + labelHeight) + (n - 1) * gap + bottomGap + xAxisHeight;
 
       const grids = [];
       const graphics = [];
@@ -1556,8 +1551,8 @@
         }
       }
 
-      // Shared bottom grid for time axis labels
-      const bottomGridTop = cumulativeTop + bottomGap;
+      // Shared bottom grid for time axis labels (fixed position regardless of binary mode)
+      const bottomGridTop = totalHeight - xAxisHeight - bottomGap;
       grids.push({
         top: bottomGridTop,
         left: gridLeft,
