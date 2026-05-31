@@ -825,6 +825,15 @@
     });
 
     function setBinaryMode(varName, mode) {
+      // Auto-select variable if not already selected
+      if (!selectedVars.includes(varName)) {
+        const maxSelectable = getMaxSelectable();
+        if (selectedVars.length < maxSelectable) {
+          selectedVars.push(varName);
+        } else {
+          return; // max reached, do nothing
+        }
+      }
       binaryMode.set(varName, mode);
       renderApp();
       renderChart();
