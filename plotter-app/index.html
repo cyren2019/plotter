@@ -657,19 +657,18 @@
       if (lines.length === 0) return { headers: [], rawRows: [], rows: [], timeColumn: '', timeFormat: 'unknown' };
       const headers = splitCSVLine(lines[0], sep);
       const rawRows = [];
+      const sampleRows = []; // only first 10 rows for time format detection
       for (let i = 1; i < lines.length; i++) {
         const fields = splitCSVLine(lines[i], sep);
         const row = {};
-        for (let j = 0; j < headers.length; j++) row[headers[j]] = j < fields.length ? fields[j] : '';
+        for (let j = 0; j < headers.length; j++) {
+          row[headers[j]] = normalizeValue(j < fields.length ? fields[j] : '');
+        }
         rawRows.push(row);
+        if (i <= 11) sampleRows.push(row); // rows 1-11 (indices 1-11 of lines)
       }
-      const normalized = rawRows.map(raw => {
-        const row = {};
-        for (const h of headers) row[h] = normalizeValue(raw[h]);
-        return row;
-      });
       const timeColumn = headers[0] || '';
-      const timeFormat = detectColumnFormat(timeColumn, normalized);
+      const timeFormat = detectColumnFormat(timeColumn, sampleRows);
       return { headers, rawRows, rows: processRows(headers, rawRows, timeColumn), timeColumn, timeFormat };
     }
 
@@ -679,16 +678,20 @@
       const sheetName = workbook.SheetNames[0];
       if (!sheetName) return { headers: [], rows: [], timeColumn: '', timeFormat: 'unknown' };
       const sheet = workbook.Sheets[sheetName];
-      const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-      if (rawRows.length === 0) return { headers: [], rawRows: [], rows: [], timeColumn: '', timeFormat: 'unknown' };
-      const headers = Object.keys(rawRows[0]);
-      const normalized = rawRows.map(raw => {
+      const rawRowsRaw = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      if (rawRowsRaw.length === 0) return { headers: [], rawRows: [], rows: [], timeColumn: '', timeFormat: 'unknown' };
+      const headers = Object.keys(rawRowsRaw[0]);
+      // Merge normalize into single pass, collect sample for time format detection
+      const rawRows = [];
+      const sampleRows = [];
+      for (let i = 0; i < rawRowsRaw.length; i++) {
         const row = {};
-        for (const h of headers) row[h] = normalizeValue(raw[h]);
-        return row;
-      });
+        for (const h of headers) row[h] = normalizeValue(rawRowsRaw[i][h]);
+        rawRows.push(row);
+        if (i < 10) sampleRows.push(row);
+      }
       const timeColumn = headers[0] || '';
-      const timeFormat = detectColumnFormat(timeColumn, normalized);
+      const timeFormat = detectColumnFormat(timeColumn, sampleRows);
       return { headers, rawRows, rows: processRows(headers, rawRows, timeColumn), timeColumn, timeFormat };
     }
 
@@ -711,6 +714,14 @@
     let restoreZoom = null; // { start, end } — preserved dataZoom state across re-renders
     let chartInstance = null;
     let dragCounter = 0;
+    // ===================== Utilities =====================
+    function debounce(fn, delay) {
+      let timer = null;
+      return function(...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn.apply(this, args), delay);
+      };
+    }
     // ===================== Binary Columns =====================
     let binaryColumns = new Set();      // column names detected as binary
     let binaryBits = new Map();         // column name → bit count (8 or 16)
@@ -789,6 +800,22 @@
         for (const col of cols) {
           binaryMode.set(col, 'dec');
         }
+        // Cache value ranges per column (used in non-auto-scale separate mode)
+        data.valueRanges = {};
+        for (const h of parsed.headers) {
+          if (h === parsed.timeColumn) continue;
+          let min = Infinity, max = -Infinity;
+          for (const row of parsed.rows) {
+            const v = row[h];
+            if (v === null || v === undefined || isNaN(Number(v)) || !isFinite(Number(v))) continue;
+            const n = Number(v);
+            if (n < min) min = n;
+            if (n > max) max = n;
+          }
+          if (min !== Infinity) {
+            data.valueRanges[h] = { min, max };
+          }
+        }
         fileName.textContent = file.name;
         const nonTime = parsed.headers.filter(h => h !== parsed.timeColumn);
         selectedVars = nonTime.slice(0, 3);
@@ -838,7 +865,10 @@
         }
       }
       binaryMode.set(varName, mode);
-      renderApp();
+      // Targeted update: toggle the single var-item state + re-render chart
+      updateSingleVarItemState(varName);
+      updateSelectedCountBadge();
+      updateChartMsg();
       renderChart();
     }
 
@@ -960,7 +990,7 @@
           const isSelected = selectedVars.includes(v);
           const isBinary = binaryColumns.has(v);
           const binMode = isBinary ? (binaryMode.get(v) || 'dec') : null;
-          const isMerged = plotType === 'time-series' && timeSeriesMode === 'merged';
+          const binDisabled = plotType !== 'time-series' || timeSeriesMode === 'merged';
 
           item.className = 'var-item' + (isSelected ? ' selected' : '') + (binMode === 'bin' ? ' bin-active' : '');
           if (isBinary) item.setAttribute('data-binary', '');
@@ -968,9 +998,9 @@
           // Build right-side content (binary dot + toggle)
           let rightContent = '';
           if (isBinary) {
-            const disabledAttr = isMerged ? 'disabled' : '';
+            const disabledAttr = binDisabled ? 'disabled' : '';
             const activeClass = binMode === 'bin' ? 'active' : '';
-            const titleText = isMerged ? '切换至分图模式可用' : (binMode === 'bin' ? '切换至十进制' : '切换至二进制');
+            const titleText = binDisabled ? '仅在时序图分图模式下可用' : (binMode === 'bin' ? '切换至十进制' : '切换至二进制');
             rightContent = `
               <button class="bin-toggle ${activeClass}" ${disabledAttr} title="${titleText}">BIN</button>
             `;
@@ -1001,7 +1031,11 @@
               }
               selectedVars.push(v);
             }
-            renderApp();
+            // Targeted update: toggle class, update badge, re-render chart only
+            item.classList.toggle('selected', selectedVars.includes(v));
+            updateSelectedCountBadge();
+            updateChartMsg();
+            renderChart();
           });
           // Attach binary toggle event listener (toggle on click)
           if (isBinary) {
@@ -1010,7 +1044,9 @@
               binBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (!binBtn.disabled) {
-                  const newMode = binMode === 'bin' ? 'dec' : 'bin';
+                  // Read current mode from global state (not closure, which is stale after targeted updates)
+                  const currentMode = binaryMode.get(v) || 'dec';
+                  const newMode = currentMode === 'bin' ? 'dec' : 'bin';
                   setBinaryMode(v, newMode);
                 }
               });
@@ -1022,8 +1058,35 @@
 
       renderVars();
 
+      // CSS visibility-based search filter (no DOM recreation)
+      const filterVarItems = debounce((filterText) => {
+        const lower = filterText.toLowerCase().trim();
+        const items = varList.querySelectorAll('.var-item');
+        let visibleCount = 0;
+        items.forEach(item => {
+          const nameEl = item.querySelector('.name');
+          const name = nameEl ? nameEl.textContent : '';
+          const visible = !lower || name.toLowerCase().includes(lower);
+          item.style.display = visible ? '' : 'none';
+          if (visible) visibleCount++;
+        });
+        // Show/hide "no matching variables" message
+        let emptyEl = varList.querySelector('.var-empty');
+        if (visibleCount === 0 && items.length > 0) {
+          if (!emptyEl) {
+            emptyEl = document.createElement('div');
+            emptyEl.className = 'var-empty';
+            emptyEl.style.cssText = 'padding: 40px 16px; text-align: center; font-size: 12px; color: var(--text); opacity: 0.3;';
+            emptyEl.textContent = '无匹配变量';
+            varList.appendChild(emptyEl);
+          }
+          emptyEl.style.display = '';
+        } else if (emptyEl) {
+          emptyEl.style.display = 'none';
+        }
+      }, 150);
       sidebar.querySelector('#' + searchId).addEventListener('input', (e) => {
-        renderVars(e.target.value);
+        filterVarItems(e.target.value);
       });
 
       sidebar.querySelector('#deselectAllBtn').addEventListener('click', () => {
@@ -1031,7 +1094,15 @@
         for (const col of binaryColumns) {
           binaryMode.set(col, 'dec');
         }
-        renderApp();
+        // Clear all .selected and .bin-active classes on existing DOM
+        varList.querySelectorAll('.var-item').forEach(el => {
+          el.classList.remove('selected', 'bin-active');
+          const toggle = el.querySelector('.bin-toggle');
+          if (toggle) toggle.classList.remove('active');
+        });
+        updateSelectedCountBadge();
+        updateChartMsg();
+        renderChart();
       });
 
       const plotSection = document.createElement('section');
@@ -1089,7 +1160,24 @@
               binaryMode.set(col, 'dec');
             }
           }
-          renderApp();
+          // Update active button states inline
+          const toggle = btn.closest('.ts-toggle');
+          if (toggle) {
+            toggle.querySelectorAll('.btn[data-mode]').forEach(b => {
+              b.classList.toggle('active', b.dataset.mode === timeSeriesMode);
+            });
+          }
+          // Show/hide auto-scale button
+          const autoScaleToggle = plotSection.querySelector('.ts-toggle:first-of-type');
+          if (autoScaleToggle) {
+            autoScaleToggle.style.display = timeSeriesMode === 'separate' ? 'flex' : 'none';
+          }
+          // Update bin controls enabled/disabled state
+          updateBinControlsState();
+          // Update mode label
+          const label = plotSection.querySelector('.plot-label span');
+          if (label) label.textContent = getModeLabel();
+          renderChart();
         });
       });
 
@@ -1192,15 +1280,94 @@
       return Infinity;
     }
 
+    // ===================== Targeted UI Helpers =====================
+    // Lightweight DOM updates that avoid a full renderApp() rebuild.
+
+    function updateSelectedCountBadge() {
+      const badge = document.querySelector('.selected-count .badge');
+      if (!badge) return;
+      badge.textContent = selectedVars.length;
+      badge.classList.toggle('empty', selectedVars.length === 0);
+    }
+
+    function updateChartMsg() {
+      const msgEl = document.getElementById('chartMsg');
+      if (!msgEl) return;
+      const msg = getChartMessage();
+      if (msg) {
+        msgEl.style.display = 'flex';
+        let p = msgEl.querySelector('p');
+        if (!p) { p = document.createElement('p'); msgEl.appendChild(p); }
+        p.textContent = msg;
+      } else {
+        msgEl.style.display = 'none';
+      }
+    }
+
+    function updateSingleVarItemState(varName) {
+      const items = document.querySelectorAll('.var-item');
+      items.forEach(el => {
+        const nameEl = el.querySelector('.name');
+        if (nameEl && nameEl.textContent === varName) {
+          el.classList.toggle('selected', selectedVars.includes(varName));
+          const isBin = binaryColumns.has(varName);
+          const binMode = isBin ? (binaryMode.get(varName) || 'dec') : null;
+          el.classList.toggle('bin-active', binMode === 'bin');
+          const btn = el.querySelector('.bin-toggle');
+          if (btn) {
+            btn.classList.toggle('active', binMode === 'bin');
+            const binDisabled = plotType !== 'time-series' || timeSeriesMode === 'merged';
+            btn.disabled = binDisabled;
+            btn.title = binDisabled ? '仅在时序图分图模式下可用' : (binMode === 'bin' ? '切换至十进制' : '切换至二进制');
+          }
+        }
+      });
+    }
+
+    function updateBinControlsState() {
+      const items = document.querySelectorAll('.var-item[data-binary]');
+      const binDisabled = plotType !== 'time-series' || timeSeriesMode === 'merged';
+      items.forEach(el => {
+        const btn = el.querySelector('.bin-toggle');
+        if (btn) {
+          btn.disabled = binDisabled;
+          btn.title = binDisabled ? '仅在时序图分图模式下可用' : (btn.classList.contains('active') ? '切换至十进制' : '切换至二进制');
+        }
+      });
+    }
+
+    function updateMaxSelectableText() {
+      const container = document.querySelector('.selected-count');
+      if (!container) return;
+      const existing = container.querySelector('.max-text');
+      if (existing) existing.remove();
+      const max = getMaxSelectable();
+      if (max !== Infinity) {
+        const span = document.createElement('span');
+        span.className = 'max-text';
+        span.style.cssText = 'opacity:0.5';
+        span.textContent = '（最多 ' + max + ' 个）';
+        container.appendChild(span);
+      }
+    }
+
     // ===================== Chart Rendering =====================
     function renderChart() {
       const container = document.getElementById('chart');
       const msgEl = document.getElementById('chartMsg');
       if (!container || !data) return;
 
-      if (chartInstance) {
-        chartInstance.dispose();
-        chartInstance = null;
+      // Lazy-init chart instance: reuse if exists and still in the DOM,
+      // re-create if renderApp() rebuilt the DOM (old canvas destroyed)
+      let isNewInstance = false;
+      if (!chartInstance || !document.contains(chartInstance.getDom())) {
+        if (chartInstance) {
+          try { chartInstance.dispose(); } catch (e) { /* ignore */ }
+          chartInstance = null;
+        }
+        if (!container.parentElement) return;
+        chartInstance = echarts.init(container);
+        isNewInstance = true;
       }
 
       const msg = getChartMessage();
@@ -1214,7 +1381,7 @@
       }
       msgEl.style.display = 'none';
 
-      // Pre-set container height before init to ensure correct canvas size
+      // Pre-set container height before setOption to ensure correct canvas size
       // Must match constants in buildTimeSeriesOption() separate mode
       if (plotType === 'time-series' && timeSeriesMode === 'separate') {
         const varsToPlot = selectedVars.slice(0, 10);
@@ -1234,16 +1401,18 @@
         container.style.height = '100%';
       }
 
-      chartInstance = echarts.init(container);
+      chartInstance.resize(); // ensure canvas matches container size
 
-      // Double-click to reset zoom
-      chartInstance.on('dblclick', () => {
-        chartInstance.dispatchAction({
-          type: 'dataZoom',
-          start: 0,
-          end: 100,
+      // Double-click to reset zoom (attach once)
+      if (isNewInstance) {
+        chartInstance.on('dblclick', () => {
+          chartInstance.dispatchAction({
+            type: 'dataZoom',
+            start: 0,
+            end: 100,
+          });
         });
-      });
+      }
 
       let option;
       switch (plotType) {
@@ -1275,6 +1444,8 @@
       '#3b82f6', '#22c55e', '#f59e0b', '#ef4444',
       '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16',
     ];
+
+    const SAMPLING_THRESHOLD = 10000; // apply LTTB sampling when data exceeds 10k rows
 
     function getBitColor(bit) {
       return BIT_COLORS[bit % BIT_COLORS.length];
@@ -1313,6 +1484,7 @@
             return Number(val);
           }),
           symbol: 'none',
+          sampling: rows.length > SAMPLING_THRESHOLD ? 'lttb' : undefined,
         }));
 
         return {
@@ -1453,6 +1625,7 @@
               xAxisIndex: rowIndex,
               yAxisIndex: rowIndex,
               itemStyle: { color: getBitColor(bitRow) },
+              sampling: rows.length > SAMPLING_THRESHOLD ? 'lttb' : undefined,
             });
 
             cumulativeTop += rowHeightBit;
@@ -1515,23 +1688,20 @@
           if (separateAutoScale) {
             yAxisConfig.scale = true;
           } else {
-            const values = rows
-              .map(row => row[variable])
-              .filter(v => v !== null && v !== undefined && !isNaN(Number(v)) && isFinite(Number(v)))
-              .map(v => Number(v));
-            let yMin = 0, yMax = 1;
-            if (values.length) {
-              yMin = values[0]; yMax = values[0];
-              for (let k = 1; k < values.length; k++) {
-                if (values[k] < yMin) yMin = values[k];
-                if (values[k] > yMax) yMax = values[k];
+            const range = data.valueRanges && data.valueRanges[variable];
+            if (range) {
+              const padding = (range.max - range.min) * 0.1;
+              if (padding === 0) {
+                yAxisConfig.min = range.min - 1;
+                yAxisConfig.max = range.max + 1;
+              } else {
+                yAxisConfig.min = range.min - padding;
+                yAxisConfig.max = range.max + padding;
               }
+            } else {
+              yAxisConfig.min = 0;
+              yAxisConfig.max = 1;
             }
-            const padding = (yMax - yMin) * 0.1;
-            if (padding === 0) { yMin -= 1; yMax += 1; }
-            else { yMin -= padding; yMax += padding; }
-            yAxisConfig.min = yMin;
-            yAxisConfig.max = yMax;
           }
 
           yAxes.push(yAxisConfig);
@@ -1548,6 +1718,7 @@
             xAxisIndex: rowIndex,
             yAxisIndex: rowIndex,
             lineStyle: { width: 1.5 },
+            sampling: rows.length > SAMPLING_THRESHOLD ? 'lttb' : undefined,
           });
 
           // Variable name label below
@@ -1688,10 +1859,11 @@
       };
     }
 
-    // Global resize
-    window.addEventListener('resize', () => {
+    // Global resize (debounced)
+    const debouncedResize = debounce(() => {
       if (chartInstance) chartInstance.resize();
-    });
+    }, 100);
+    window.addEventListener('resize', debouncedResize);
   </script>
 </body>
 </html>
