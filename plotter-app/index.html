@@ -1020,6 +1020,12 @@
       plotSection.querySelectorAll('.plot-tabs .btn[data-type]').forEach(btn => {
         btn.addEventListener('click', () => {
           plotType = btn.dataset.type;
+          // Reset binary mode to dec when switching to merged mode
+          if (plotType === 'time-series' && timeSeriesMode === 'merged') {
+            for (const col of binaryColumns) {
+              binaryMode.set(col, 'dec');
+            }
+          }
           const max = getMaxSelectable();
           if (selectedVars.length > max) {
             selectedVars = selectedVars.slice(0, max);
@@ -1031,6 +1037,12 @@
       plotSection.querySelectorAll('.ts-toggle .btn[data-mode]').forEach(btn => {
         btn.addEventListener('click', () => {
           timeSeriesMode = btn.dataset.mode;
+          // Reset binary mode to dec when switching to merged mode
+          if (timeSeriesMode === 'merged') {
+            for (const col of binaryColumns) {
+              binaryMode.set(col, 'dec');
+            }
+          }
           renderApp();
         });
       });
