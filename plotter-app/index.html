@@ -378,6 +378,8 @@
     .bin-toggle button:not(:disabled):not(.active):hover { opacity: 0.7; }
     .var-item[data-binary] { background: #f0fdf4; }
     [data-theme="dark"] .var-item[data-binary] { background: rgba(22, 163, 74, 0.08); }
+    .var-item.bin-active { border-left: 3px solid #22c55e; background: #f0fdf4; }
+    [data-theme="dark"] .var-item.bin-active { border-left: 3px solid #16a34a; background: rgba(22, 163, 74, 0.12); }
 
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -959,7 +961,7 @@
           const binMode = isBinary ? (binaryMode.get(v) || 'dec') : null;
           const isMerged = plotType === 'time-series' && timeSeriesMode === 'merged';
 
-          item.className = 'var-item' + (isSelected ? ' selected' : '');
+          item.className = 'var-item' + (isSelected ? ' selected' : '') + (binMode === 'bin' ? ' bin-active' : '');
           if (isBinary) item.setAttribute('data-binary', '');
 
           // Build right-side content (binary dot + toggle)
