@@ -37,6 +37,15 @@
 - ↔️ 侧边栏宽度可拖拽调整
 - ⏱️ 手动切换时间轴列
 
+### 二进制变量识别与按位拆分
+- **自动检测**：自动识别正整数列（max ≤ 65536），标记为可拆分变量
+- **8/16 位自适应**：≤255 展开为 8 位，256~65535 展开为 16 位
+- **DEC/BIN 切换**：分图模式下可一键切换十进制/二进制显示
+- **按位分行**：每个 bit 独立一行（bitN-1 → bit0 从上到下），类似逻辑分析仪
+- **彩色编码**：8 色循环赋值，不同 bit 以不同颜色区分
+- **增强 tooltip**：悬停任意 bit 曲线时，显示所有 bit 的完整状态，当前 bit 高亮加粗
+- **合并模式保护**：切换到合并模式时自动重置为十进制显示
+
 ### 时序图分图模式
 - **自适应 Y 轴**：自动根据可见数据范围调整刻度（`scale: true`）
 - **固定 Y 轴**：基于全局数据范围锁定刻度
@@ -90,7 +99,7 @@ python3 -m http.server 8080 -d plotter-app
 ```
 plotter/
 ├── plotter-app/
-│   ├── index.html          # 完整应用（HTML + CSS + JS，约 1500 行）
+│   ├── index.html          # 完整应用（HTML + CSS + JS，约 1700 行）
 │   ├── lib/                # 第三方库（CDN 离线化）
 │   │   ├── dayjs.min.js            # 日期解析 (v1.x)
 │   │   ├── customParseFormat.js    # dayjs 严格解析插件
@@ -111,7 +120,7 @@ plotter/
 | 层面 | 方案 |
 |------|------|
 | **架构** | 单文件 SPA（Single Page Application），无构建步骤 |
-| **状态管理** | 全局变量（`data`, `selectedVars`, `plotType`, `timeSeriesMode`） |
+| **状态管理** | 全局变量（`data`, `selectedVars`, `plotType`, `timeSeriesMode`, `binaryColumns`, `binaryBits`, `binaryMode`） |
 | **渲染模式** | `renderApp()` 全量重建 DOM → `renderChart()` 销毁并重建 ECharts 实例 |
 | **时间解析** | 双阶段：dayjs 原生解析 → 20+ 格式严格匹配 → 宽松匹配兜底 |
 | **CSV 解析** | 自定义解析器，支持引号转义、分隔符自动检测、编码回退 |
@@ -156,6 +165,8 @@ UTF-8 (strict) → GB18030 (兼容 GBK/GB2312) → UTF-8 (lenient)
 - `renderChart()` — ECharts 实例创建与配置
 - `buildTimeSeriesOption()` — 时序图配置生成（合并/分图）
 - `buildXYOption()` / `buildXYZOption()` — 散点图配置生成
+- `detectBinaryColumns()` — 二进制变量自动检测
+- `getBitColor()` / `setBinaryMode()` — 按位拆分颜色与模式切换
 
 ---
 
