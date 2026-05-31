@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>数据绘图工具</title>
+  <title>Plotter</title>
   <style>
     :root {
       --accent: #3b82f6;
@@ -92,17 +92,17 @@
       50% { opacity: 0.3; }
     }
     .theme-toggle {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 6px 12px;
-      font-size: 12px; font-weight: 500;
-      border-radius: 6px; border: 1px solid var(--border);
-      background: var(--bg); color: var(--text);
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 32px; height: 32px;
+      border-radius: 6px; border: none;
+      background: transparent; color: var(--text);
       cursor: pointer;
       transition: all 0.15s;
+      flex-shrink: 0;
     }
     .theme-toggle:hover {
-      border-color: var(--accent-border);
       color: var(--accent);
+      background: var(--accent-bg);
     }
     header .file-name {
       font-size: 12px; color: var(--text); opacity: 0.5;
@@ -112,7 +112,7 @@
     }
     .btn {
       display: inline-flex; align-items: center; gap: 6px;
-      padding: 6px 12px;
+      height: 32px; padding: 0 12px;
       font-size: 12px; font-weight: 500;
       border-radius: 6px; border: 1px solid var(--border);
       background: var(--bg); color: var(--text);
@@ -123,6 +123,21 @@
       background: var(--accent-bg); color: var(--accent); border-color: var(--accent-border);
     }
     .btn:active { transform: scale(0.97); }
+    .lang-link {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 32px; height: 32px;
+      border-radius: 6px; border: none;
+      background: transparent; color: var(--text);
+      cursor: pointer;
+      transition: all 0.15s;
+      flex-shrink: 0;
+    }
+    .lang-link:hover {
+      color: var(--accent);
+      background: var(--accent-bg);
+    }
+    #importBtn { min-width: 110px; justify-content: center; }
+    #emptyImportBtn { min-width: 110px; justify-content: center; }
     .btn-primary {
       background: var(--accent); color: white; border-color: var(--accent);
     }
@@ -433,13 +448,13 @@
   <div id="app">
     <div class="drag-overlay" id="dragOverlay">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-      <p>释放文件以导入</p>
+      <p id="dragHint">释放文件以导入</p>
     </div>
 
     <header>
       <div class="title">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-        数据绘图工具
+        Plotter
       </div>
       <span class="file-name" id="fileName"></span>
       <div class="actions">
@@ -448,12 +463,14 @@
         </a>
         <span class="version-badge" id="versionBadge1">v1.1.3</span>
         <button class="theme-toggle" id="themeToggle" title="切换主题">
-          <svg id="themeIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-          <span id="themeLabel">明亮</span>
+          <svg id="themeIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
         </button>
-        <button class="btn" id="importBtn">
+        <button class="lang-link" id="langToggle" title="Switch to English">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><ellipse cx="12" cy="12" rx="4" ry="10"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
+        </button>
+        <button class="btn btn-primary" id="importBtn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          导入
+          <span id="importText"> 导入</span>
         </button>
       </div>
     </header>
@@ -473,11 +490,11 @@
         <div class="icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
         </div>
-        <h2>拖放或点击导入数据文件</h2>
-        <p>支持 CSV、Excel (.xls, .xlsx)、日志 (.log, .txt) 格式</p>
+        <h2 id="emptyTitle">拖放或点击导入数据文件</h2>
+        <p id="emptyDesc">支持 CSV、Excel (.xls, .xlsx)、日志 (.log, .txt) 格式</p>
         <button class="btn btn-primary" id="emptyImportBtn">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          选择文件
+          <span id="emptyImportText"> 选择文件</span>
         </button>
       </div>
     </main>
@@ -635,7 +652,7 @@
       return new Promise((resolve, reject) => {
         const r = new FileReader();
         r.onload = () => resolve(r.result);
-        r.onerror = () => reject(new Error('读取文件失败'));
+        r.onerror = () => reject(new Error(t('read_failed')));
         r.readAsArrayBuffer(file);
       });
     }
@@ -644,7 +661,7 @@
       return new Promise((resolve, reject) => {
         const r = new FileReader();
         r.onload = () => resolve(r.result);
-        r.onerror = () => reject(new Error('读取文件失败'));
+        r.onerror = () => reject(new Error(t('read_failed')));
         r.readAsText(file);
       });
     }
@@ -744,7 +761,7 @@
       const name = file.name.toLowerCase();
       if (name.endsWith('.csv') || name.endsWith('.log') || name.endsWith('.txt')) return parseCSV(file);
       if (name.endsWith('.xls') || name.endsWith('.xlsx')) return parseExcel(file);
-      throw new Error('不支持的文件格式：' + file.name);
+      throw new Error(t('unsupported_format') + file.name);
     }
 
     // ===================== App State =====================
@@ -759,6 +776,141 @@
     let restoreZoom = null; // { start, end } — preserved dataZoom state across re-renders
     let chartInstance = null;
     let dragCounter = 0;
+
+    // ===================== I18N =====================
+    const I18N = {
+      zh: {
+        import: '选择文件',
+        theme_light: '明亮',
+        theme_dark: '黑暗',
+        theme_toggle_title: '切换主题',
+        drop_hint: '释放文件以导入',
+        empty_title: '拖放或点击导入数据文件',
+        empty_desc: '支持 CSV、Excel (.xls, .xlsx)、日志 (.log, .txt) 格式',
+        select_file: '选择文件',
+        var_select: '变量选择',
+        search_placeholder: '搜索变量…',
+        deselect_all: '取消选择',
+        var_count: '个变量',
+        max_limit: '（最多 {n} 个）',
+        no_match: '无匹配变量',
+        time_series: '时序图',
+        xy_plot: 'XY图',
+        xyz_plot: 'XYZ图',
+        merged: '合并',
+        separate: '分图',
+        auto_scale: '自适应',
+        reset_zoom: '图像复位',
+        mode_ts: '时序图',
+        mode_xy: 'XY 散点图',
+        mode_xyz: 'XYZ 3D图',
+        msg_select_var: '请选择要绘制的变量',
+        msg_xy_need: 'XY模式需要至少2个变量',
+        msg_xyz_need: 'XYZ模式需要至少3个变量',
+        msg_var_limit: '{mode}最多选择 {n} 个变量',
+        unsupported_format: '不支持的文件格式：',
+        read_failed: '读取文件失败',
+        parse_failed: '文件解析失败',
+        new_version: '新版本 {v} 可用，点击前往下载',
+        bin_toggle_dec: '切换至十进制',
+        bin_toggle_bin: '切换至二进制',
+        bin_disabled: '仅在时序图分图模式下可用',
+        lang_label: 'EN',
+        lang_title: 'Switch to English',
+      },
+      en: {
+        import: 'Select File',
+        theme_light: 'Light',
+        theme_dark: 'Dark',
+        theme_toggle_title: 'Toggle Theme',
+        drop_hint: 'Drop file to import',
+        empty_title: 'Drag & drop or click to import data',
+        empty_desc: 'Supports CSV, Excel (.xls, .xlsx), Log (.log, .txt) formats',
+        select_file: 'Select File',
+        var_select: 'Variable Selection',
+        search_placeholder: 'Search variables…',
+        deselect_all: 'Deselect',
+        var_count: 'variables',
+        max_limit: '(Max {n})',
+        no_match: 'No matching variables',
+        time_series: 'Time Series',
+        xy_plot: 'XY Plot',
+        xyz_plot: 'XYZ 3D',
+        merged: 'Merged',
+        separate: 'Separate',
+        auto_scale: 'Auto Scale',
+        reset_zoom: 'Reset Zoom',
+        mode_ts: 'Time Series',
+        mode_xy: 'XY Scatter',
+        mode_xyz: 'XYZ 3D Scatter',
+        msg_select_var: 'Please select variables to plot',
+        msg_xy_need: 'XY mode requires at least 2 variables',
+        msg_xyz_need: 'XYZ mode requires at least 3 variables',
+        msg_var_limit: '{mode} chart supports max {n} variables',
+        unsupported_format: 'Unsupported file format: ',
+        read_failed: 'Failed to read file',
+        parse_failed: 'File parsing failed',
+        new_version: 'New version {v} available, click to download',
+        bin_toggle_dec: 'Switch to Decimal',
+        bin_toggle_bin: 'Switch to Binary',
+        bin_disabled: 'Only available in time-series separate mode',
+        lang_label: 'CN',
+        lang_title: '切换到中文',
+      }
+    };
+
+    let currentLang = (() => {
+      try {
+        const saved = localStorage.getItem('plotter-lang');
+        if (saved === 'en' || saved === 'zh') return saved;
+      } catch (_) {}
+      return navigator.language.startsWith('zh') ? 'zh' : 'en';
+    })();
+
+    function t(key, params) {
+      let str = (I18N[currentLang] && I18N[currentLang][key]) || (I18N['zh'][key]) || key;
+      if (params) {
+        for (const [k, v] of Object.entries(params)) {
+          str = str.replace(`{${k}}`, v);
+        }
+      }
+      return str;
+    }
+
+    function setLanguage(lang) {
+      if (!I18N[lang]) return;
+      currentLang = lang;
+      try { localStorage.setItem('plotter-lang', lang); } catch (_) {}
+      updateStaticTexts();
+      if (data) {
+        saveZoomState();
+        renderApp();
+      }
+    }
+
+    function updateLangToggle() {
+      const btn = document.getElementById('langToggle');
+      if (btn) btn.title = t('lang_title');
+    }
+
+    function updateStaticTexts() {
+      // Update static UI elements that exist when no data is loaded
+      const langBtn = document.getElementById('langToggle');
+      if (langBtn) langBtn.title = t('lang_title');
+      const themeToggleEl = document.getElementById('themeToggle');
+      if (themeToggleEl) themeToggleEl.title = t('theme_toggle_title');
+      const importText = document.getElementById('importText');
+      if (importText) importText.textContent = ' ' + t('import');
+      const dragHint = document.getElementById('dragHint');
+      if (dragHint) dragHint.textContent = t('drop_hint');
+      const emptyH2 = document.getElementById('emptyTitle');
+      if (emptyH2) emptyH2.textContent = t('empty_title');
+      const emptyP = document.getElementById('emptyDesc');
+      if (emptyP) emptyP.textContent = t('empty_desc');
+      const emptyImportText = document.getElementById('emptyImportText');
+      if (emptyImportText) emptyImportText.textContent = ' ' + t('select_file');
+    }
+
     // ===================== Utilities =====================
     function debounce(fn, delay) {
       let timer = null;
@@ -801,9 +953,9 @@
     }
 
     function getBinToggleTitle(varName, binDisabled) {
-      if (binDisabled) return '仅在时序图分图模式下可用';
+      if (binDisabled) return t('bin_disabled');
       const mode = binaryMode.get(varName) || 'dec';
-      return mode === 'bin' ? '切换至十进制' : '切换至二进制';
+      return mode === 'bin' ? t('bin_toggle_dec') : t('bin_toggle_bin');
     }
     // ===================== Binary Columns =====================
     let binaryColumns = new Set();      // column names detected as binary
@@ -823,7 +975,6 @@
     const errorText = document.getElementById('errorText');
     const errorClose = document.getElementById('errorClose');
     const themeToggle = document.getElementById('themeToggle');
-    const themeLabel = document.getElementById('themeLabel');
     const themeIcon = document.getElementById('themeIcon');
 
     // ===================== Version Check =====================
@@ -865,7 +1016,7 @@
       badges.forEach(badge => {
         if (latestVersion) {
           badge.classList.add('has-update');
-          badge.title = `新版本 ${latestVersion} 可用，点击前往下载`;
+          badge.title = t('new_version', { v: latestVersion });
           if (!badge.textContent.includes('→')) {
             badge.textContent = `${CURRENT_VERSION} → ${latestVersion}`;
           }
@@ -885,17 +1036,19 @@
       isDark = dark;
       if (dark) {
         document.documentElement.setAttribute('data-theme', 'dark');
-        themeLabel.textContent = '黑暗';
         themeIcon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
       } else {
         document.documentElement.removeAttribute('data-theme');
-        themeLabel.textContent = '明亮';
         themeIcon.innerHTML = '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
       }
     }
     themeToggle.addEventListener('click', () => {
       applyTheme(!isDark);
       if (data) renderChart();
+    });
+    const langToggle = document.getElementById('langToggle');
+    langToggle.addEventListener('click', () => {
+      setLanguage(currentLang === 'zh' ? 'en' : 'zh');
     });
 
     // ===================== Error Handling =====================
@@ -922,7 +1075,7 @@
       hideError();
       const ext = file.name.split('.').pop().toLowerCase();
       if (!['csv', 'xls', 'xlsx', 'log', 'txt'].includes(ext)) {
-        showError('不支持的文件格式：' + file.name);
+        showError(t('unsupported_format') + file.name);
         return;
       }
       try {
@@ -944,7 +1097,7 @@
         plotType = 'time-series';
         renderApp();
       } catch (err) {
-        showError(err.message || '文件解析失败');
+        showError(err.message || t('parse_failed'));
       }
     }
 
@@ -1037,22 +1190,22 @@
         <div class="sidebar-header">
           <div class="title-row">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
-            <span>变量选择</span>
+            <span>${t('var_select')}</span>
           </div>
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
             <div class="search-box" style="flex: 1; margin-bottom: 0;">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <input type="text" id="${searchId}" placeholder="搜索变量…">
+              <input type="text" id="${searchId}" placeholder="${t('search_placeholder')}">
             </div>
-            <button class="btn" id="deselectAllBtn" style="flex-shrink: 0;">取消选择</button>
+            <button class="btn" id="deselectAllBtn" style="flex-shrink: 0;">${t('deselect_all')}</button>
           </div>
           <div class="selected-count">
             <span class="badge ${selectedVars.length === 0 ? 'empty' : ''}">${selectedVars.length}</span>
-            <span>/ ${vars.length} 个变量</span>
+            <span>/ ${vars.length} ${t('var_count')}</span>
             ${(() => {
               const max = getMaxSelectable();
               if (max !== Infinity) {
-                return `<span style="opacity:0.5">（最多 ${max} 个）</span>`;
+                return `<span style="opacity:0.5">${t('max_limit', { n: max })}</span>`;
               }
               return '';
             })()}
@@ -1111,7 +1264,7 @@
           const empty = document.createElement('div');
           empty.className = 'var-empty';
           empty.style.cssText = 'padding: 40px 16px; text-align: center; font-size: 12px; color: var(--text); opacity: 0.3;';
-          empty.textContent = '无匹配变量';
+          empty.textContent = t('no_match');
           varList.appendChild(empty);
           return;
         }
@@ -1152,8 +1305,8 @@
               if (selectedVars.length >= max) {
                 const toast = sidebar.querySelector('#varLimitToast');
                 if (toast) {
-                  const modeName = plotType === 'time-series' ? '时序图' : plotType === 'xy' ? 'XY图' : 'XYZ图';
-                  toast.textContent = `${modeName}最多选择 ${max} 个变量`;
+                  const modeKey = plotType === 'time-series' ? 'time_series' : plotType === 'xy' ? 'xy_plot' : 'xyz_plot';
+                  toast.textContent = t('msg_var_limit', { mode: t(modeKey), n: max });
                   toast.style.display = 'block';
                   clearTimeout(toast._hideTimer);
                   toast._hideTimer = setTimeout(() => { toast.style.display = 'none'; }, 2000);
@@ -1210,7 +1363,7 @@
             emptyEl = document.createElement('div');
             emptyEl.className = 'var-empty';
             emptyEl.style.cssText = 'padding: 40px 16px; text-align: center; font-size: 12px; color: var(--text); opacity: 0.3;';
-            emptyEl.textContent = '无匹配变量';
+            emptyEl.textContent = t('no_match');
             varList.appendChild(emptyEl);
           }
           emptyEl.style.display = '';
@@ -1248,19 +1401,19 @@
       const tsToggleVisible = plotType === 'time-series';
       plotSection.innerHTML = `
         <nav class="plot-tabs">
-          <button class="btn ${plotType === 'time-series' ? 'active' : ''}" data-type="time-series">时序图</button>
-          <button class="btn ${plotType === 'xy' ? 'active' : ''}" data-type="xy">XY图</button>
-          <button class="btn ${plotType === 'xyz' ? 'active' : ''}" data-type="xyz">XYZ图</button>
+          <button class="btn ${plotType === 'time-series' ? 'active' : ''}" data-type="time-series">${t('time_series')}</button>
+          <button class="btn ${plotType === 'xy' ? 'active' : ''}" data-type="xy">${t('xy_plot')}</button>
+          <button class="btn ${plotType === 'xyz' ? 'active' : ''}" data-type="xyz">${t('xyz_plot')}</button>
           <div style="display: ${tsToggleVisible ? 'flex' : 'none'}; align-items: center; gap: 4px; margin-left: auto;">
             <div class="ts-toggle" data-ts="auto-scale" style="display: ${timeSeriesMode === 'separate' ? 'flex' : 'none'}">
-              <button class="btn ${separateAutoScale ? 'active' : ''}" data-auto-scale="toggle">自适应</button>
+              <button class="btn ${separateAutoScale ? 'active' : ''}" data-auto-scale="toggle">${t('auto_scale')}</button>
             </div>
             <div class="ts-toggle">
-              <button class="btn" data-reset="zoom">图像复位</button>
+              <button class="btn" data-reset="zoom">${t('reset_zoom')}</button>
             </div>
             <div class="ts-toggle">
-              <button class="btn ${timeSeriesMode === 'merged' ? 'active' : ''}" data-mode="merged">合并</button>
-              <button class="btn ${timeSeriesMode === 'separate' ? 'active' : ''}" data-mode="separate">分图</button>
+              <button class="btn ${timeSeriesMode === 'merged' ? 'active' : ''}" data-mode="merged">${t('merged')}</button>
+              <button class="btn ${timeSeriesMode === 'separate' ? 'active' : ''}" data-mode="separate">${t('separate')}</button>
             </div>
           </div>
         </nav>
@@ -1405,9 +1558,9 @@
 
     function getModeLabel() {
       switch (plotType) {
-        case 'time-series': return '时序图';
-        case 'xy': return 'XY 散点图';
-        case 'xyz': return 'XYZ 3D图';
+        case 'time-series': return t('mode_ts');
+        case 'xy': return t('mode_xy');
+        case 'xyz': return t('mode_xyz');
         default: return '';
       }
     }
@@ -1563,9 +1716,9 @@
     }
 
     function getChartMessage() {
-      if (plotType === 'time-series' && selectedVars.length === 0) return '请选择要绘制的变量';
-      if (plotType === 'xy' && selectedVars.length < 2) return 'XY模式需要至少2个变量';
-      if (plotType === 'xyz' && selectedVars.length < 3) return 'XYZ模式需要至少3个变量';
+      if (plotType === 'time-series' && selectedVars.length === 0) return t('msg_select_var');
+      if (plotType === 'xy' && selectedVars.length < 2) return t('msg_xy_need');
+      if (plotType === 'xyz' && selectedVars.length < 3) return t('msg_xyz_need');
       return null;
     }
 
@@ -1996,6 +2149,7 @@
 
     // Kick off version check
     checkVersion();
+    updateStaticTexts();
   </script>
 </body>
 </html>
