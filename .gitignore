@@ -33,3 +33,9 @@ dist-ssr/
 # Python cache
 __pycache__/
 *.pyc
+
+# AI agent config (managed locally, not shared)
+AGENTS.md
+CLAUDE.md
+.superpowers/
+docs/superpowers/
