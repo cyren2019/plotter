@@ -843,28 +843,14 @@
 
     async function checkVersion() {
       try {
-        // Try releases API first
-        let resp = await fetch('https://api.github.com/repos/cyren2019/plotter/releases/latest', {
+        const resp = await fetch('https://api.github.com/repos/cyren2019/plotter/releases/latest', {
           signal: AbortSignal.timeout(5000)
         });
-        let data;
         if (resp.ok) {
-          data = await resp.json();
+          const data = await resp.json();
           const remote = data.tag_name || '';
           if (remote && compareVersions(remote, CURRENT_VERSION) > 0) {
             latestVersion = remote;
-          }
-        } else {
-          // Fallback to tags API
-          resp = await fetch('https://api.github.com/repos/cyren2019/plotter/tags?per_page=1', {
-            signal: AbortSignal.timeout(5000)
-          });
-          if (resp.ok) {
-            data = await resp.json();
-            const remote = (data[0] && data[0].name) || '';
-            if (remote && compareVersions(remote, CURRENT_VERSION) > 0) {
-              latestVersion = remote;
-            }
           }
         }
       } catch (_) {
@@ -874,18 +860,21 @@
     }
 
     function updateVersionBadges() {
+      const releasesUrl = 'https://github.com/cyren2019/plotter/releases';
       const badges = document.querySelectorAll('.version-badge');
       badges.forEach(badge => {
         if (latestVersion) {
           badge.classList.add('has-update');
-          badge.title = `新版本 ${latestVersion} 可用`;
+          badge.title = `新版本 ${latestVersion} 可用，点击前往下载`;
           if (!badge.textContent.includes('→')) {
             badge.textContent = `${CURRENT_VERSION} → ${latestVersion}`;
           }
+          badge.onclick = () => window.open(releasesUrl, '_blank');
         } else {
           badge.classList.remove('has-update');
           badge.title = '';
           badge.textContent = CURRENT_VERSION;
+          badge.onclick = null;
         }
       });
     }
