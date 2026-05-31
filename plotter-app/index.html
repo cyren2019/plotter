@@ -481,6 +481,37 @@
       return parseTime(value) !== null;
     }
 
+
+    function detectBinaryColumns(headers, rows, timeColumn) {
+      const cols = new Set();
+      const bits = new Map();
+
+      for (const h of headers) {
+        if (h === timeColumn) continue;
+
+        let maxVal = 0;
+        let isPositiveInt = true;
+
+        for (const row of rows) {
+          const v = row[h];
+          if (v === null || v === undefined) continue;
+          const n = Number(v);
+          if (!Number.isInteger(n) || n < 0 || !Number.isFinite(n)) {
+            isPositiveInt = false;
+            break;
+          }
+          if (n > maxVal) maxVal = n;
+        }
+
+        if (isPositiveInt && maxVal <= 65536) {
+          cols.add(h);
+          bits.set(h, maxVal <= 255 ? 8 : 16);
+        }
+      }
+
+      return { cols, bits };
+    }
+
     function detectColumnFormat(column, rows) {
       const sampleSize = Math.min(rows.length, 10);
       const validDates = [];
