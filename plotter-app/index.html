@@ -1338,15 +1338,33 @@
         };
       }
 
-       // Separate mode: one subplot per variable, independent Y-axis
-      const n = varsToPlot.length;
-      const rowHeight = 200; // px, fixed height per subplot
-      const gap = 20; // px, gap between subplots (increased)
-      const topPad = 8; // px
-      const xAxisHeight = 15; // px for shared bottom time axis (increased for label + tick space)
-      const labelHeight = 10; // px for variable name label below each subplot
-      const bottomGap = 8; // px, small space between last label and bottom axis
-      const totalHeight = topPad + n * (rowHeight + labelHeight) + (n - 1) * gap + bottomGap + xAxisHeight;
+       // Separate mode: one subplot per variable (or per bit for binary vars)
+      // Calculate total rows and bit layout
+      const varLayout = []; // { variable, isBinVar, bitCount, rowCount }
+      let totalRows = 0;
+      for (const variable of varsToPlot) {
+        const isBinVar = binaryColumns.has(variable) && binaryMode.get(variable) === 'bin';
+        const bitCount = isBinVar ? (binaryBits.get(variable) || 8) : 0;
+        const rowCount = isBinVar ? bitCount : 1;
+        varLayout.push({ variable, isBinVar, bitCount, rowCount });
+        totalRows += rowCount;
+      }
+
+      const rowHeight = 200;
+      const rowHeightBit = 50; // compact row for binary bits (logic analyzer style)
+      const gap = 20;
+      const topPad = 8;
+      const xAxisHeight = 15;
+      const labelHeight = 10;
+      const bottomGap = 8;
+
+      // Calculate total height
+      let totalHeight = topPad;
+      for (const v of varLayout) {
+        totalHeight += v.rowCount * (v.isBinVar ? rowHeightBit : rowHeight);
+        totalHeight += labelHeight;
+      }
+      totalHeight += (totalRows - 1) * gap + bottomGap + xAxisHeight;
 
       const grids = [];
       const graphics = [];
@@ -1360,83 +1378,123 @@
       const gridLeft = 60;
       const gridRight = 30;
 
-      varsToPlot.forEach((variable, i) => {
-        const top = topPad + i * (rowHeight + labelHeight + gap);
+      let rowIndex = 0;
+      let cumulativeTop = topPad;
 
-        grids.push({
-          top: top,
-          left: gridLeft,
-          right: gridRight,
-          height: rowHeight,
-          containLabel: false,
-          show: true,
-          borderColor: tc.gridBorder,
-          borderWidth: 1,
-          backgroundColor: tc.gridBg,
-        });
-
-        xAxes.push({
-          type: 'category',
-          data: timeLabels,
-          gridIndex: i,
-          axisLine: { show: false },
-          axisTick: { show: false },
-          axisLabel: { show: false },
-          axisPointer: { show: true, type: 'line', lineStyle: { color: '#4f46e5', width: 2 } },
-          position: 'bottom',
-        });
-
-        // Variable name label below the subplot
-        graphics.push({
-          type: 'text',
-          left: 'center',
-          top: top + rowHeight + 4,
-          style: {
-            text: variable,
-            fill: isDark ? '#f9fafb' : '#111827',
-            font: 'bold 12px sans-serif',
-          },
-        });
-
-        const yAxisConfig = {
-          type: 'value',
-          gridIndex: i,
-          show: true,
-          axisLine: { show: true, onZero: false, lineStyle: { color: tc.axisLine } },
-          axisTick: { show: true, lineStyle: { color: tc.axisLine } },
-          axisLabel: { show: true, color: tc.yLabel, fontSize: 10, formatter: v => Number(v).toFixed(1) },
-          splitLine: { show: true, lineStyle: { color: tc.splitLine, type: 'dashed' } },
-        };
-
-        const isBinVar = timeSeriesMode === 'separate'
-          && binaryColumns.has(variable) && binaryMode.get(variable) === 'bin';
-        const bitCount = isBinVar ? (binaryBits.get(variable) || 8) : 0;
-
+      for (const { variable, isBinVar, bitCount, rowCount } of varLayout) {
         if (isBinVar) {
-          // Binary mode: split into bit series
-          for (let bit = 0; bit < bitCount; bit++) {
+          // Binary: variable name label above the bit block
+          graphics.push({
+            type: 'text',
+            left: 'center',
+            top: cumulativeTop - 14,
+            style: {
+              text: variable,
+              fill: isDark ? '#f9fafb' : '#111827',
+              font: 'bold 12px sans-serif',
+            },
+          });
+
+          // Bits from top to bottom: bitN-1 → bit0
+          for (let bitRow = bitCount - 1; bitRow >= 0; bitRow--) {
+            const gridTop = cumulativeTop;
+
+            grids.push({
+              top: gridTop,
+              left: gridLeft,
+              right: gridRight,
+              height: rowHeightBit,
+              containLabel: false,
+              show: true,
+              borderColor: tc.gridBorder,
+              borderWidth: 1,
+              backgroundColor: tc.gridBg,
+            });
+
+            xAxes.push({
+              type: 'category',
+              data: timeLabels,
+              gridIndex: rowIndex,
+              axisLine: { show: false },
+              axisTick: { show: false },
+              axisLabel: { show: false },
+              axisPointer: { show: true, type: 'line', lineStyle: { color: '#4f46e5', width: 2 } },
+              position: 'bottom',
+            });
+
+            yAxes.push({
+              type: 'value',
+              gridIndex: rowIndex,
+              show: true,
+              axisLine: { show: true, onZero: false, lineStyle: { color: tc.axisLine } },
+              axisTick: { show: true, lineStyle: { color: tc.axisLine } },
+              axisLabel: { show: true, color: tc.yLabel, fontSize: 10, formatter: `bit${bitRow}` },
+              splitLine: { show: true, lineStyle: { color: tc.splitLine, type: 'dashed' } },
+              min: 0,
+              max: 1.2,
+              scale: false,
+            });
+
             series.push({
-              name: `${variable} · bit${bit}`,
+              name: `${variable} · bit${bitRow}`,
               type: 'line',
               data: rows.map(row => {
                 const val = Number(row[variable]);
                 if (val === null || val === undefined || isNaN(val) || !isFinite(val)) return null;
-                return (val >> bit) & 1;
+                return (val >> bitRow) & 1;
               }),
               symbol: 'none',
-              lineStyle: { width: 1 },
-              xAxisIndex: i,
-              yAxisIndex: i,
-              itemStyle: { color: getBitColor(bit) },
+              lineStyle: { width: 1.5 },
+              xAxisIndex: rowIndex,
+              yAxisIndex: rowIndex,
+              itemStyle: { color: getBitColor(bitRow) },
             });
+
+            cumulativeTop += rowHeightBit;
+            rowIndex++;
           }
 
-          // Y-axis fixed for binary mode
-          yAxisConfig.min = 0;
-          yAxisConfig.max = 1.2;
-          yAxisConfig.scale = false;
+          // Gap after binary block
+          if (rowIndex < totalRows) {
+            cumulativeTop += gap;
+          }
         } else {
-          // Decimal mode: existing logic
+          // Decimal: existing logic
+          const gridTop = cumulativeTop;
+
+          grids.push({
+            top: gridTop,
+            left: gridLeft,
+            right: gridRight,
+            height: rowHeight,
+            containLabel: false,
+            show: true,
+            borderColor: tc.gridBorder,
+            borderWidth: 1,
+            backgroundColor: tc.gridBg,
+          });
+
+          xAxes.push({
+            type: 'category',
+            data: timeLabels,
+            gridIndex: rowIndex,
+            axisLine: { show: false },
+            axisTick: { show: false },
+            axisLabel: { show: false },
+            axisPointer: { show: true, type: 'line', lineStyle: { color: '#4f46e5', width: 2 } },
+            position: 'bottom',
+          });
+
+          const yAxisConfig = {
+            type: 'value',
+            gridIndex: rowIndex,
+            show: true,
+            axisLine: { show: true, onZero: false, lineStyle: { color: tc.axisLine } },
+            axisTick: { show: true, lineStyle: { color: tc.axisLine } },
+            axisLabel: { show: true, color: tc.yLabel, fontSize: 10, formatter: v => Number(v).toFixed(1) },
+            splitLine: { show: true, lineStyle: { color: tc.splitLine, type: 'dashed' } },
+          };
+
           if (separateAutoScale) {
             yAxisConfig.scale = true;
           } else {
@@ -1459,6 +1517,8 @@
             yAxisConfig.max = yMax;
           }
 
+          yAxes.push(yAxisConfig);
+
           series.push({
             name: variable,
             type: 'line',
@@ -1468,17 +1528,34 @@
               return Number(val);
             }),
             symbol: 'none',
-            xAxisIndex: i,
-            yAxisIndex: i,
+            xAxisIndex: rowIndex,
+            yAxisIndex: rowIndex,
             lineStyle: { width: 1.5 },
           });
-        }
 
-        yAxes.push(yAxisConfig);
-      });
+          // Variable name label below
+          graphics.push({
+            type: 'text',
+            left: 'center',
+            top: gridTop + rowHeight + 4,
+            style: {
+              text: variable,
+              fill: isDark ? '#f9fafb' : '#111827',
+              font: 'bold 12px sans-serif',
+            },
+          });
+
+          cumulativeTop += rowHeight;
+          rowIndex++;
+
+          if (rowIndex < totalRows) {
+            cumulativeTop += gap;
+          }
+        }
+      }
 
       // Shared bottom grid for time axis labels
-      const bottomGridTop = topPad + n * (rowHeight + labelHeight) + (n - 1) * gap + bottomGap;
+      const bottomGridTop = cumulativeTop + bottomGap;
       grids.push({
         top: bottomGridTop,
         left: gridLeft,
@@ -1494,7 +1571,7 @@
       xAxes.push({
         type: 'category',
         data: timeLabels,
-        gridIndex: n,
+        gridIndex: rowIndex,
         axisLine: { show: true, onZero: false, lineStyle: { color: tc.axisLine } },
         axisTick: { show: true, lineStyle: { color: tc.axisLine } },
         axisLabel: {
@@ -1510,14 +1587,14 @@
       // Dummy yAxis for the bottom grid to prevent ECharts internal errors
       yAxes.push({
         type: 'value',
-        gridIndex: n,
+        gridIndex: rowIndex,
         show: false,
         min: 0,
         max: 1,
       });
 
       // All X axis indices including the shared bottom axis
-      const allXAxisIndices = Array.from({ length: n + 1 }, (_, idx) => idx);
+      const allXAxisIndices = Array.from({ length: rowIndex + 1 }, (_, idx) => idx);
 
       return {
         backgroundColor: tc.bg,
