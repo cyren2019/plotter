@@ -363,21 +363,24 @@
     .bin-badge {
       font-size: 9px; padding: 1px 5px;
       border-radius: 9999px;
-      background: #22c55e; color: white; font-weight: 500;
+      background: #3b82f6; color: white; font-weight: 500;
       flex-shrink: 0;
     }
-    [data-theme="dark"] .bin-badge { background: #16a34a; }
-    .bin-toggle { display: flex; background: var(--border); border-radius: 6px; padding: 1px; gap: 1px; flex-shrink: 0; }
-    .bin-toggle button {
-      padding: 2px 8px; font-size: 10px; border: none;
+    [data-theme="dark"] .bin-badge { background: #2563eb; }
+    .bin-toggle {
+      padding: 2px 8px; font-size: 10px; border: 1px solid var(--border);
       background: transparent; color: var(--text); cursor: pointer;
-      border-radius: 4px; transition: all 0.1s;
+      border-radius: 9999px; transition: all 0.15s; flex-shrink: 0;
+      font-family: inherit; line-height: 1.4;
     }
-    .bin-toggle button.active { background: var(--accent); color: white; }
-    .bin-toggle button:disabled { opacity: 0.35; cursor: not-allowed; }
-    .bin-toggle button:not(:disabled):not(.active):hover { opacity: 0.7; }
-    .var-item[data-binary] { background: #f0fdf4; }
-    [data-theme="dark"] .var-item[data-binary] { background: rgba(22, 163, 74, 0.08); }
+    .bin-toggle:hover:not(:disabled) { border-color: #3b82f6; color: #3b82f6; }
+    .bin-toggle.active { background: #3b82f6; border-color: #3b82f6; color: white; }
+    [data-theme="dark"] .bin-toggle.active { background: #2563eb; border-color: #2563eb; }
+    .bin-toggle:disabled { opacity: 0.35; cursor: not-allowed; }
+    .var-item[data-binary] { background: #eff6ff; }
+    [data-theme="dark"] .var-item[data-binary] { background: rgba(59, 130, 246, 0.08); }
+    .var-item.bin-active { border-left: 3px solid #3b82f6; background: #eff6ff; }
+    [data-theme="dark"] .var-item.bin-active { border-left: 3px solid #2563eb; background: rgba(59, 130, 246, 0.12); }
 
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -825,6 +828,15 @@
     });
 
     function setBinaryMode(varName, mode) {
+      // Auto-select variable if not already selected
+      if (!selectedVars.includes(varName)) {
+        const maxSelectable = getMaxSelectable();
+        if (selectedVars.length < maxSelectable) {
+          selectedVars.push(varName);
+        } else {
+          return; // max reached, do nothing
+        }
+      }
       binaryMode.set(varName, mode);
       renderApp();
       renderChart();
@@ -950,21 +962,17 @@
           const binMode = isBinary ? (binaryMode.get(v) || 'dec') : null;
           const isMerged = plotType === 'time-series' && timeSeriesMode === 'merged';
 
-          item.className = 'var-item' + (isSelected ? ' selected' : '');
+          item.className = 'var-item' + (isSelected ? ' selected' : '') + (binMode === 'bin' ? ' bin-active' : '');
           if (isBinary) item.setAttribute('data-binary', '');
 
           // Build right-side content (binary dot + toggle)
           let rightContent = '';
           if (isBinary) {
             const disabledAttr = isMerged ? 'disabled' : '';
-            const decActive = binMode === 'dec' ? 'active' : '';
-            const binActive = binMode === 'bin' ? 'active' : '';
-            const titleText = isMerged ? '切换至分图模式可用' : '';
+            const activeClass = binMode === 'bin' ? 'active' : '';
+            const titleText = isMerged ? '切换至分图模式可用' : (binMode === 'bin' ? '切换至十进制' : '切换至二进制');
             rightContent = `
-              <div class="bin-toggle">
-                <button class="${decActive}" ${disabledAttr} title="${titleText}" data-bin-mode="dec">DEC</button>
-                <button class="${binActive}" ${disabledAttr} title="${titleText}" data-bin-mode="bin">BIN</button>
-              </div>
+              <button class="bin-toggle ${activeClass}" ${disabledAttr} title="${titleText}">BIN</button>
             `;
           }
 
@@ -995,22 +1003,18 @@
             }
             renderApp();
           });
-          // Attach binary toggle event listeners (safe — no inline onclick)
+          // Attach binary toggle event listener (toggle on click)
           if (isBinary) {
-            const toggle = item.querySelector('.bin-toggle');
-            if (toggle) {
-              toggle.addEventListener('click', (e) => {
+            const binBtn = item.querySelector('.bin-toggle');
+            if (binBtn) {
+              binBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-              });
-            }
-            item.querySelectorAll('.bin-toggle button').forEach(btn => {
-              btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (!btn.disabled) {
-                  setBinaryMode(v, btn.dataset.binMode);
+                if (!binBtn.disabled) {
+                  const newMode = binMode === 'bin' ? 'dec' : 'bin';
+                  setBinaryMode(v, newMode);
                 }
               });
-            });
+            }
           }
           varList.appendChild(item);
         });
@@ -1024,6 +1028,9 @@
 
       sidebar.querySelector('#deselectAllBtn').addEventListener('click', () => {
         selectedVars = [];
+        for (const col of binaryColumns) {
+          binaryMode.set(col, 'dec');
+        }
         renderApp();
       });
 
