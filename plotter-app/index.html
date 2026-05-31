@@ -1028,6 +1028,9 @@
 
       sidebar.querySelector('#deselectAllBtn').addEventListener('click', () => {
         selectedVars = [];
+        for (const col of binaryColumns) {
+          binaryMode.set(col, 'dec');
+        }
         renderApp();
       });
 
