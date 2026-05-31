@@ -824,6 +824,12 @@
       if (file) processFile(file);
     });
 
+    function setBinaryMode(varName, mode) {
+      binaryMode.set(varName, mode);
+      renderApp();
+      renderChart();
+    }
+
     // ===================== Render App =====================
     function renderApp() {
       if (!data) {
