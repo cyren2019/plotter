@@ -956,29 +956,15 @@
           // Build right-side content (binary indicator + dot)
           let rightContent = '';
           if (isBinary) {
-            // Preview: show binary or decimal value
-            const sampleRow = data.rows.find(r => Number(r[v]) !== null && Number(r[v]) !== undefined && Number.isInteger(Number(r[v])));
-            let preview = '';
-            if (sampleRow) {
-              const numVal = Number(sampleRow[v]);
-              if (binMode === 'bin') {
-                const bits = binaryBits.get(v) || 8;
-                preview = numVal.toString(2).padStart(bits, '0');
-              } else {
-                preview = String(numVal);
-              }
-            }
             const disabledAttr = isMerged ? 'disabled' : '';
             const decActive = binMode === 'dec' ? 'active' : '';
             const binActive = binMode === 'bin' ? 'active' : '';
             const titleText = isMerged ? '切换至分图模式可用' : '';
             rightContent = `
               <span class="bin-badge" ${isMerged ? 'title="切换至分图模式可用"' : ''}>BIN</span>
-              <div class="bin-toggle" onclick="event.stopPropagation()">
-                <button class="${decActive}" ${disabledAttr} title="${titleText}"
-                  onclick="event.stopPropagation();setBinaryMode('${escapeHtml(v)}','dec')">DEC</button>
-                <button class="${binActive}" ${disabledAttr} title="${titleText}"
-                  onclick="event.stopPropagation();setBinaryMode('${escapeHtml(v)}','bin')">BIN</button>
+              <div class="bin-toggle">
+                <button class="${decActive}" ${disabledAttr} title="${titleText}" data-bin-mode="dec">DEC</button>
+                <button class="${binActive}" ${disabledAttr} title="${titleText}" data-bin-mode="bin">BIN</button>
               </div>
             `;
           }
@@ -1013,6 +999,23 @@
             }
             renderApp();
           });
+          // Attach binary toggle event listeners (safe — no inline onclick)
+          if (isBinary) {
+            const toggle = item.querySelector('.bin-toggle');
+            if (toggle) {
+              toggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+              });
+            }
+            item.querySelectorAll('.bin-toggle button').forEach(btn => {
+              btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (!btn.disabled) {
+                  setBinaryMode(v, btn.dataset.binMode);
+                }
+              });
+            });
+          }
           varList.appendChild(item);
         });
       }
