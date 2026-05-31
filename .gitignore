@@ -39,3 +39,6 @@ AGENTS.md
 CLAUDE.md
 .superpowers/
 docs/superpowers/
+
+# user-specific config
+release.sh
