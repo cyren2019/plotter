@@ -1408,43 +1408,73 @@
           splitLine: { show: true, lineStyle: { color: tc.splitLine, type: 'dashed' } },
         };
 
-        if (separateAutoScale) {
-          yAxisConfig.scale = true;
-        } else {
-          const values = rows
-            .map(row => row[variable])
-            .filter(v => v !== null && v !== undefined && !isNaN(Number(v)) && isFinite(Number(v)))
-            .map(v => Number(v));
-          let yMin = 0, yMax = 1;
-          if (values.length) {
-            yMin = values[0]; yMax = values[0];
-            for (let k = 1; k < values.length; k++) {
-              if (values[k] < yMin) yMin = values[k];
-              if (values[k] > yMax) yMax = values[k];
-            }
+        const isBinVar = timeSeriesMode === 'separate'
+          && binaryColumns.has(variable) && binaryMode.get(variable) === 'bin';
+        const bitCount = isBinVar ? (binaryBits.get(variable) || 8) : 0;
+
+        if (isBinVar) {
+          // Binary mode: split into bit series
+          for (let bit = 0; bit < bitCount; bit++) {
+            series.push({
+              name: `${variable} · bit${bit}`,
+              type: 'line',
+              data: rows.map(row => {
+                const val = Number(row[variable]);
+                if (val === null || val === undefined || isNaN(val) || !isFinite(val)) return null;
+                return (val >> bit) & 1;
+              }),
+              symbol: 'none',
+              lineStyle: { width: 1 },
+              xAxisIndex: i,
+              yAxisIndex: i,
+              itemStyle: { color: getBitColor(bit) },
+            });
           }
-          const padding = (yMax - yMin) * 0.1;
-          if (padding === 0) { yMin -= 1; yMax += 1; }
-          else { yMin -= padding; yMax += padding; }
-          yAxisConfig.min = yMin;
-          yAxisConfig.max = yMax;
+
+          // Y-axis fixed for binary mode
+          yAxisConfig.min = 0;
+          yAxisConfig.max = 1.2;
+          yAxisConfig.scale = false;
+        } else {
+          // Decimal mode: existing logic
+          if (separateAutoScale) {
+            yAxisConfig.scale = true;
+          } else {
+            const values = rows
+              .map(row => row[variable])
+              .filter(v => v !== null && v !== undefined && !isNaN(Number(v)) && isFinite(Number(v)))
+              .map(v => Number(v));
+            let yMin = 0, yMax = 1;
+            if (values.length) {
+              yMin = values[0]; yMax = values[0];
+              for (let k = 1; k < values.length; k++) {
+                if (values[k] < yMin) yMin = values[k];
+                if (values[k] > yMax) yMax = values[k];
+              }
+            }
+            const padding = (yMax - yMin) * 0.1;
+            if (padding === 0) { yMin -= 1; yMax += 1; }
+            else { yMin -= padding; yMax += padding; }
+            yAxisConfig.min = yMin;
+            yAxisConfig.max = yMax;
+          }
+
+          series.push({
+            name: variable,
+            type: 'line',
+            data: rows.map(row => {
+              const val = row[variable];
+              if (val === null || val === undefined || isNaN(Number(val)) || !isFinite(Number(val))) return null;
+              return Number(val);
+            }),
+            symbol: 'none',
+            xAxisIndex: i,
+            yAxisIndex: i,
+            lineStyle: { width: 1.5 },
+          });
         }
 
         yAxes.push(yAxisConfig);
-
-        series.push({
-          name: variable,
-          type: 'line',
-          data: rows.map(row => {
-            const val = row[variable];
-            if (val === null || val === undefined || isNaN(Number(val)) || !isFinite(Number(val))) return null;
-            return Number(val);
-          }),
-          symbol: 'none',
-          xAxisIndex: i,
-          yAxisIndex: i,
-          lineStyle: { width: 1.5 },
-        });
       });
 
       // Shared bottom grid for time axis labels
