@@ -758,6 +758,14 @@
       try {
         const parsed = await parseFile(file);
         data = parsed;
+        // Detect binary columns
+        const { cols, bits } = detectBinaryColumns(parsed.headers, parsed.rows, parsed.timeColumn);
+        binaryColumns = cols;
+        binaryBits = bits;
+        binaryMode = new Map();
+        for (const col of cols) {
+          binaryMode.set(col, 'dec');
+        }
         fileName.textContent = file.name;
         const nonTime = parsed.headers.filter(h => h !== parsed.timeColumn);
         selectedVars = nonTime.slice(0, 3);
