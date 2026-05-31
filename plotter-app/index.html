@@ -1341,17 +1341,16 @@
        // Separate mode: one subplot per variable (or per bit for binary vars)
       // Calculate total rows and bit layout
       const varLayout = []; // { variable, isBinVar, bitCount, rowCount }
-      let totalRows = 0;
       for (const variable of varsToPlot) {
         const isBinVar = binaryColumns.has(variable) && binaryMode.get(variable) === 'bin';
         const bitCount = isBinVar ? (binaryBits.get(variable) || 8) : 0;
         const rowCount = isBinVar ? bitCount : 1;
         varLayout.push({ variable, isBinVar, bitCount, rowCount });
-        totalRows += rowCount;
       }
 
       const rowHeight = 200;
-      const rowHeightBit = 50; // compact row for binary bits (logic analyzer style)
+      // Binary block height: 8bit → 200px, 16bit → 400px (25px per bit)
+      const rowHeightBit = 25;
       const gap = 20;
       const topPad = 8;
       const xAxisHeight = 15;
@@ -1364,7 +1363,8 @@
         totalHeight += v.rowCount * (v.isBinVar ? rowHeightBit : rowHeight);
         totalHeight += labelHeight;
       }
-      totalHeight += (totalRows - 1) * gap + bottomGap + xAxisHeight;
+      // Gap between variable blocks (not between individual bits)
+      totalHeight += (varLayout.length - 1) * gap + bottomGap + xAxisHeight;
 
       const grids = [];
       const graphics = [];
@@ -1381,7 +1381,8 @@
       let rowIndex = 0;
       let cumulativeTop = topPad;
 
-      for (const { variable, isBinVar, bitCount, rowCount } of varLayout) {
+      for (let varIdx = 0; varIdx < varLayout.length; varIdx++) {
+        const { variable, isBinVar, bitCount, rowCount } = varLayout[varIdx];
         if (isBinVar) {
           // Binary: variable name label above the bit block
           graphics.push({
@@ -1454,8 +1455,8 @@
             rowIndex++;
           }
 
-          // Gap after binary block
-          if (rowIndex < totalRows) {
+          // Gap between variable blocks (not after the last one)
+          if (varIdx < varLayout.length - 1) {
             cumulativeTop += gap;
           }
         } else {
@@ -1548,7 +1549,8 @@
           cumulativeTop += rowHeight;
           rowIndex++;
 
-          if (rowIndex < totalRows) {
+          // Gap between variable blocks (not after the last one)
+          if (varIdx < varLayout.length - 1) {
             cumulativeTop += gap;
           }
         }
