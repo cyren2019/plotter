@@ -1215,8 +1215,8 @@
       // Must match constants in buildTimeSeriesOption() separate mode
       if (plotType === 'time-series' && timeSeriesMode === 'separate') {
         const n = Math.min(selectedVars.length, 10);
-        const rowHeight = 200, labelHeight = 10, gap = 20, topPad = 8, bottomGap = 8, xAxisHeight = 15;
-        const totalHeight = topPad + n * (rowHeight + labelHeight) + (n - 1) * gap + bottomGap + xAxisHeight;
+        const rowHeight = 200, labelHeight = 10, gap = 20, topPad = 8, bottomGap = 8;
+        const totalHeight = topPad + n * (rowHeight + labelHeight) + (n - 1) * gap + bottomGap;
         container.style.height = totalHeight + 'px';
       } else {
         container.style.height = '100%';
@@ -1353,13 +1353,10 @@
       const rowHeightBit = 25;
       const gap = 20;
       const topPad = 8;
-      const xAxisHeight = 15;
       const labelHeight = 10;
       const bottomGap = 8;
 
-      // Total height based on original layout (stable — bottom axis position doesn't shift)
       const n = varsToPlot.length;
-      const totalHeight = topPad + n * (rowHeight + labelHeight) + (n - 1) * gap + bottomGap + xAxisHeight;
 
       const grids = [];
       const graphics = [];
@@ -1379,18 +1376,6 @@
       for (let varIdx = 0; varIdx < varLayout.length; varIdx++) {
         const { variable, isBinVar, bitCount, rowCount } = varLayout[varIdx];
         if (isBinVar) {
-          // Binary: variable name label above the bit block
-          graphics.push({
-            type: 'text',
-            left: 'center',
-            top: cumulativeTop - 14,
-            style: {
-              text: variable,
-              fill: isDark ? '#f9fafb' : '#111827',
-              font: 'bold 12px sans-serif',
-            },
-          });
-
           // Bits from top to bottom: bitN-1 → bit0
           for (let bitRow = bitCount - 1; bitRow >= 0; bitRow--) {
             const gridTop = cumulativeTop;
@@ -1449,6 +1434,18 @@
             cumulativeTop += rowHeightBit;
             rowIndex++;
           }
+
+          // Variable name label below the bit block (same as decimal)
+          graphics.push({
+            type: 'text',
+            left: 'center',
+            top: cumulativeTop + 4,
+            style: {
+              text: variable,
+              fill: isDark ? '#f9fafb' : '#111827',
+              font: 'bold 12px sans-serif',
+            },
+          });
 
           // Gap between variable blocks (not after the last one)
           if (varIdx < varLayout.length - 1) {
@@ -1551,47 +1548,8 @@
         }
       }
 
-      // Shared bottom grid for time axis labels (fixed position regardless of binary mode)
-      const bottomGridTop = totalHeight - xAxisHeight - bottomGap;
-      grids.push({
-        top: bottomGridTop,
-        left: gridLeft,
-        right: gridRight,
-        height: xAxisHeight,
-        containLabel: false,
-        show: true,
-        borderColor: 'transparent',
-        borderWidth: 0,
-        backgroundColor: 'transparent',
-      });
-
-      xAxes.push({
-        type: 'category',
-        data: timeLabels,
-        gridIndex: rowIndex,
-        axisLine: { show: true, onZero: false, lineStyle: { color: tc.axisLine } },
-        axisTick: { show: true, lineStyle: { color: tc.axisLine } },
-        axisLabel: {
-          show: true,
-          color: tc.xLabel,
-          rotate: timeLabels.length > 20 ? 45 : 0,
-          fontSize: 10,
-        },
-        axisPointer: { show: true, type: 'line', lineStyle: { color: '#4f46e5', width: 2 } },
-        position: 'bottom',
-      });
-
-      // Dummy yAxis for the bottom grid to prevent ECharts internal errors
-      yAxes.push({
-        type: 'value',
-        gridIndex: rowIndex,
-        show: false,
-        min: 0,
-        max: 1,
-      });
-
-      // All X axis indices including the shared bottom axis
-      const allXAxisIndices = Array.from({ length: rowIndex + 1 }, (_, idx) => idx);
+      // All X axis indices for dataZoom synchronization
+      const allXAxisIndices = Array.from({ length: rowIndex }, (_, idx) => idx);
 
       return {
         backgroundColor: tc.bg,
