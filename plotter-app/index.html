@@ -945,13 +945,53 @@
 
         filtered.forEach(v => {
           const item = document.createElement('div');
-          item.className = 'var-item' + (selectedVars.includes(v) ? ' selected' : '');
+          const isSelected = selectedVars.includes(v);
+          const isBinary = binaryColumns.has(v);
+          const binMode = isBinary ? (binaryMode.get(v) || 'dec') : null;
+          const isMerged = plotType === 'time-series' && timeSeriesMode === 'merged';
+
+          item.className = 'var-item' + (isSelected ? ' selected' : '');
+          if (isBinary) item.setAttribute('data-binary', '');
+
+          // Build right-side content (binary indicator + dot)
+          let rightContent = '';
+          if (isBinary) {
+            // Preview: show binary or decimal value
+            const sampleRow = data.rows.find(r => Number(r[v]) !== null && Number(r[v]) !== undefined && Number.isInteger(Number(r[v])));
+            let preview = '';
+            if (sampleRow) {
+              const numVal = Number(sampleRow[v]);
+              if (binMode === 'bin') {
+                const bits = binaryBits.get(v) || 8;
+                preview = numVal.toString(2).padStart(bits, '0');
+              } else {
+                preview = String(numVal);
+              }
+            }
+            const disabledAttr = isMerged ? 'disabled' : '';
+            const decActive = binMode === 'dec' ? 'active' : '';
+            const binActive = binMode === 'bin' ? 'active' : '';
+            const titleText = isMerged ? '切换至分图模式可用' : '';
+            rightContent = `
+              <span class="bin-badge" ${isMerged ? 'title="切换至分图模式可用"' : ''}>BIN</span>
+              <div class="bin-toggle" onclick="event.stopPropagation()">
+                <button class="${decActive}" ${disabledAttr} title="${titleText}"
+                  onclick="event.stopPropagation();setBinaryMode('${escapeHtml(v)}','dec')">DEC</button>
+                <button class="${binActive}" ${disabledAttr} title="${titleText}"
+                  onclick="event.stopPropagation();setBinaryMode('${escapeHtml(v)}','bin')">BIN</button>
+              </div>
+            `;
+          }
+          if (isSelected) {
+            rightContent += '<div class="dot"></div>';
+          }
+
           item.innerHTML = `
             <div class="checkbox">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
             </div>
             <span class="name" title="${escapeHtml(v)}">${escapeHtml(v)}</span>
-            ${selectedVars.includes(v) ? '<div class="dot"></div>' : ''}
+            ${rightContent}
           `;
           item.addEventListener('click', () => {
             if (selectedVars.includes(v)) {
