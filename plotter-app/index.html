@@ -359,6 +359,26 @@
 
     input[type="file"] { display: none; }
 
+    /* Binary column indicators */
+    .bin-badge {
+      font-size: 9px; padding: 1px 5px;
+      border-radius: 9999px;
+      background: #22c55e; color: white; font-weight: 500;
+      flex-shrink: 0;
+    }
+    [data-theme="dark"] .bin-badge { background: #16a34a; }
+    .bin-toggle { display: flex; background: var(--border); border-radius: 6px; padding: 1px; gap: 1px; flex-shrink: 0; }
+    .bin-toggle button {
+      padding: 2px 8px; font-size: 10px; border: none;
+      background: transparent; color: var(--text); cursor: pointer;
+      border-radius: 4px; transition: all 0.1s;
+    }
+    .bin-toggle button.active { background: var(--accent); color: white; }
+    .bin-toggle button:disabled { opacity: 0.35; cursor: not-allowed; }
+    .bin-toggle button:not(:disabled):not(.active):hover { opacity: 0.7; }
+    .var-item[data-binary] { background: #f0fdf4; }
+    [data-theme="dark"] .var-item[data-binary] { background: rgba(22, 163, 74, 0.08); }
+
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
