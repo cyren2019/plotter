@@ -43,3 +43,5 @@ docs/superpowers/
 # user-specific config
 release.sh
 .gstack/
+.omc
+.claude

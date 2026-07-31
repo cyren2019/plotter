@@ -424,6 +424,7 @@
     .fft-num-input::placeholder { color: var(--text); opacity: 0.3; font-style: italic; }
     .fft-unit-label { font-size: 10px; color: var(--text); opacity: 0.5; margin-left: 2px; }
     .fft-freq-input-group { display: flex; align-items: center; gap: 2px; }
+    .fft-nyquist-hint { font-size: 9px; color: var(--text); opacity: 0.4; margin-left: 4px; white-space: nowrap; }
     .fft-segmented {
       display: flex; align-items: center; gap: 0; padding: 2px;
       background: var(--border); border-radius: 5px;
@@ -867,6 +868,10 @@
         fft_linear: '笛卡尔坐标',
         fft_log: '对数坐标',
         fft_auto: '自动',
+        fft_manual: '手动',
+        fft_db: 'dB',
+        fft_sample_rate: '采样率',
+        fft_detect: '检测',
         msg_fft_need: 'FFT模式需要选择1个变量',
         msg_fft_no_data: '所选范围内有效数据不足，无法进行FFT分析',
         mode_fft: 'FFT 频谱分析',
@@ -920,6 +925,10 @@
         fft_linear: 'Linear',
         fft_log: 'Logarithmic',
         fft_auto: 'Auto',
+        fft_manual: 'Manual',
+        fft_db: 'dB',
+        fft_sample_rate: 'Sample Rate',
+        fft_detect: 'Detect',
         msg_fft_need: 'FFT mode requires 1 variable selected',
         msg_fft_no_data: 'Not enough valid data in range for FFT analysis',
         mode_fft: 'FFT Spectrum',
@@ -1032,13 +1041,14 @@
     let binaryMode = new Map();         // column name → 'dec' | 'bin'
 
     // ===================== FFT State =====================
-    let fftBaseFreq = null;        // null = auto-detect from time data
-    let fftFreqUnit = 'Hz';        // 'Hz' | 'rad/s' | 'deg/s'
-    let fftYAxis = 'per-unit';     // 'per-unit' | 'physical'
-    let fftXAxis = 'linear';       // 'linear' | 'log'
-    let fftDataZoomStart = 0;      // current dataZoom start percentage
-    let fftDataZoomEnd = 100;      // current dataZoom end percentage
-    let fftDataZoomHandler = null; // debounced dataZoom event handler reference
+    let fftBaseFreq = null;           // null = auto-detect from time data
+    let fftFreqUnit = 'Hz';           // 'Hz' | 'rad/s' | 'deg/s'
+    let fftYAxis = 'per-unit';        // 'per-unit' | 'physical' | 'db'
+    let fftXAxis = 'linear';          // 'linear' | 'log'
+    let fftSampleRateOverride = null; // null = auto-detect; number = manual override (Hz)
+    let fftDataZoomStart = 0;         // current dataZoom start percentage
+    let fftDataZoomEnd = 100;         // current dataZoom end percentage
+    let fftDataZoomHandler = null;    // debounced dataZoom event handler reference
 
     // ===================== DOM Elements =====================
     const app = document.getElementById('app');
@@ -1072,28 +1082,50 @@
     }
 
     function detectSampleRate(rows, timeColumn) {
-      // If time values are Date objects, compute sample rate from average delta
-      let totalDelta = 0;
-      let count = 0;
-      let prevDate = null;
-      for (let i = 0; i < rows.length; i++) {
+      // Returns { sampleRate, confidence: 'high'|'low'|'unknown', method }
+      let dateCount = 0, numericCount = 0, totalDelta = 0, deltaCount = 0;
+      let prevDate = null, prevNumeric = null;
+      const deltas = [];
+      const maxSamples = Math.min(rows.length, 200);
+      for (let i = 0; i < maxSamples; i++) {
         const val = rows[i][timeColumn];
         if (val instanceof Date) {
+          dateCount++;
           if (prevDate !== null) {
-            const delta = (val - prevDate) / 1000; // seconds
-            if (delta > 0) {
-              totalDelta += delta;
-              count++;
-            }
+            const delta = (val - prevDate) / 1000;
+            if (delta > 0) { totalDelta += delta; deltaCount++; deltas.push(delta); }
           }
           prevDate = val;
+        } else if (typeof val === 'number' && Number.isFinite(val)) {
+          numericCount++;
+          if (prevNumeric !== null) {
+            const delta = val - prevNumeric;
+            if (delta > 0) { totalDelta += delta; deltaCount++; deltas.push(delta); }
+          }
+          prevNumeric = val;
+        } else if (val !== null && val !== undefined) {
+          const n = Number(val);
+          if (Number.isFinite(n)) {
+            numericCount++;
+            if (prevNumeric !== null) {
+              const delta = n - prevNumeric;
+              if (delta > 0) { totalDelta += delta; deltaCount++; deltas.push(delta); }
+            }
+            prevNumeric = n;
+          }
         }
       }
-      if (count > 0) {
-        const avgDelta = totalDelta / count;
-        return 1 / avgDelta; // Hz
+      if (deltaCount > 0) {
+        const avgDelta = totalDelta / deltaCount;
+        const sr = 1 / avgDelta;
+        let variance = 0;
+        for (let i = 0; i < deltas.length; i++) variance += (deltas[i] - avgDelta) ** 2;
+        const cv = Math.sqrt(variance / deltas.length) / avgDelta;
+        const confidence = cv < 0.05 ? 'high' : cv < 0.3 ? 'low' : 'unknown';
+        const method = dateCount > 0 ? 'date' : 'numeric';
+        return { sampleRate: sr, confidence, method };
       }
-      return 1; // normalized frequency (unitless)
+      return { sampleRate: 1, confidence: 'unknown', method: 'fallback' };
     }
 
     function convertFreqUnit(freqs, unit) {
@@ -1104,7 +1136,7 @@
       return result;
     }
 
-    function computeFFT(rows, varName, startIdx, endIdx) {
+    function computeFFT(rows, varName, startIdx, endIdx, sampleRate) {
       // Extract non-null values from the selected range
       const rawValues = [];
       for (let i = startIdx; i < endIdx && i < rows.length; i++) {
@@ -1119,22 +1151,102 @@
       // Determine FFT size: next power of 2
       const fftSize = nextPowerOf2(rawValues.length);
       const window = hannWindow(rawValues.length);
+
+      // Compute coherent gain for amplitude compensation
+      let windowSum = 0;
+      for (let i = 0; i < rawValues.length; i++) windowSum += window[i];
+      const coherentGain = windowSum / rawValues.length;
+
       const padded = new Float64Array(fftSize);
       for (let i = 0; i < rawValues.length; i++) {
         padded[i] = rawValues[i] * window[i];
       }
-      // Rest is already zero (zero-padded)
 
-      const magnitudes = FourierTransform.rfft(padded);
-      // rfft returns N/2 bins (DC at index 0, then positive frequencies)
-      const numBins = magnitudes.length;
+      const rawMagnitudes = FourierTransform.rfft(padded);
+      const numBins = rawMagnitudes.length;
+
+      // Compensate for window coherent gain
+      const magnitudes = new Float64Array(numBins);
+      for (let i = 0; i < numBins; i++) {
+        magnitudes[i] = rawMagnitudes[i] / coherentGain;
+      }
+
+      // Build correct frequency axis: f[i] = i * sampleRate / fftSize
+      const binResolution = sampleRate / fftSize;
+      const freqs = new Float64Array(numBins);
+      for (let i = 0; i < numBins; i++) {
+        freqs[i] = i * binResolution;
+      }
 
       return {
         magnitudes: magnitudes,
+        freqs: freqs,
         numBins: numBins,
         fftSize: fftSize,
         dataLength: rawValues.length,
+        binResolution: binResolution,
       };
+    }
+
+    function autoDetectBaseFreq(magnitudes, freqs, sampleRate, fftSize) {
+      // Find fundamental frequency using harmonic scoring.
+      if (!magnitudes || magnitudes.length < 3) return { freq: sampleRate / fftSize, confidence: 'unknown' };
+
+      const binResolution = sampleRate / fftSize;
+
+      // Find all local maxima (skip DC at index 0)
+      let maxMag = 0;
+      const peaks = [];
+      for (let i = 1; i < magnitudes.length - 1; i++) {
+        if (magnitudes[i] > magnitudes[i - 1] && magnitudes[i] > magnitudes[i + 1]) {
+          peaks.push({ index: i, mag: magnitudes[i], freq: freqs[i] });
+          if (magnitudes[i] > maxMag) maxMag = magnitudes[i];
+        }
+      }
+
+      if (peaks.length === 0) return { freq: binResolution, confidence: 'unknown' };
+
+      const noiseFloor = maxMag * 0.1;
+      const sigPeaks = peaks.filter(p => p.mag >= noiseFloor);
+
+      if (sigPeaks.length === 0) {
+        const best = peaks.reduce((a, b) => a.mag > b.mag ? a : b);
+        return { freq: best.freq, confidence: 'low' };
+      }
+
+      // Harmonic scoring for each candidate
+      let meanSpectrum = 0;
+      for (let i = 0; i < magnitudes.length; i++) meanSpectrum += magnitudes[i];
+      meanSpectrum /= magnitudes.length;
+
+      const nyquist = sampleRate / 2;
+      let bestCandidate = null, bestScore = -Infinity;
+
+      for (const peak of sigPeaks) {
+        const f0 = peak.freq;
+        if (f0 < binResolution * 0.5) continue;
+        let harmonicScore = peak.mag;
+        let harmonicCount = 1;
+        for (let h = 2; h <= 8; h++) {
+          const harmonicFreq = h * f0;
+          if (harmonicFreq > nyquist * 0.95) break;
+          const binIdx = Math.round(harmonicFreq / binResolution);
+          if (binIdx < magnitudes.length) {
+            harmonicScore += magnitudes[binIdx];
+            harmonicCount++;
+          }
+        }
+        const avgHarmonicMag = harmonicScore / harmonicCount;
+        const score = avgHarmonicMag / Math.max(meanSpectrum, 1e-10);
+        if (score > bestScore) {
+          bestScore = score;
+          bestCandidate = { freq: f0, confidence: harmonicCount >= 2 ? 'high' : 'low', harmonicCount };
+        }
+      }
+
+      if (bestCandidate) return bestCandidate;
+      const best = sigPeaks.reduce((a, b) => a.mag > b.mag ? a : b);
+      return { freq: best.freq, confidence: 'low' };
     }
 
     // ===================== Version Check =====================
@@ -1588,8 +1700,21 @@
                        placeholder="${t('fft_auto')}"
                        step="any" min="0.001">
                 <span class="fft-unit-label">Hz</span>
+                <span class="fft-nyquist-hint" id="fftNyquistHint"></span>
               </div>
             </label>
+            <label class="fft-label">
+              <span>${t('fft_sample_rate')}</span>
+              <div class="fft-freq-input-group">
+                <input type="number" class="fft-num-input" id="fftSampleRateInput"
+                       value="${fftSampleRateOverride !== null ? fftSampleRateOverride : ''}"
+                       placeholder="${t('fft_auto')}"
+                       step="any" min="0.001">
+                <span class="fft-unit-label">Hz</span>
+              </div>
+            </label>
+          </div>
+          <div class="fft-panel-row">
             <label class="fft-label">
               <span>${t('fft_freq_unit')}</span>
               <div class="fft-segmented">
@@ -1601,8 +1726,9 @@
             <label class="fft-label">
               <span>${t('fft_y_axis')}</span>
               <div class="fft-segmented">
-                <button class="fft-seg-btn ${fftYAxis === 'per-unit' ? 'active' : ''}" data-fft-param="yAxis" data-value="per-unit">${t('fft_per_unit')}</button>
                 <button class="fft-seg-btn ${fftYAxis === 'physical' ? 'active' : ''}" data-fft-param="yAxis" data-value="physical">${t('fft_physical')}</button>
+                <button class="fft-seg-btn ${fftYAxis === 'per-unit' ? 'active' : ''}" data-fft-param="yAxis" data-value="per-unit">${t('fft_per_unit')}</button>
+                <button class="fft-seg-btn ${fftYAxis === 'db' ? 'active' : ''}" data-fft-param="yAxis" data-value="db">${t('fft_db')}</button>
               </div>
             </label>
             <label class="fft-label">
@@ -1741,6 +1867,20 @@
           });
         }
 
+        // Sample rate override input
+        const fftSampleRateInput = fftPanel.querySelector('#fftSampleRateInput');
+        if (fftSampleRateInput) {
+          fftSampleRateInput.addEventListener('input', () => {
+            const val = fftSampleRateInput.value.trim();
+            if (val === '') {
+              fftSampleRateOverride = null;
+            } else {
+              const n = parseFloat(val);
+              if (!isNaN(n) && n > 0) fftSampleRateOverride = n;
+            }
+          });
+        }
+
         // Apply button — triggers FFT recompute with current params
         const fftApplyBtn = fftPanel.querySelector('#fftApplyBtn');
         if (fftApplyBtn) {
@@ -1752,6 +1892,19 @@
             if (selUnit) fftFreqUnit = selUnit.dataset.value;
             if (selY) fftYAxis = selY.dataset.value;
             if (selX) fftXAxis = selX.dataset.value;
+            // Re-read frequency inputs
+            const freqInput = fftPanel.querySelector('#fftBaseFreqInput');
+            if (freqInput) {
+              const val = freqInput.value.trim();
+              if (val === '') fftBaseFreq = null;
+              else { const n = parseFloat(val); if (!isNaN(n) && n > 0) fftBaseFreq = n; }
+            }
+            const srInput = fftPanel.querySelector('#fftSampleRateInput');
+            if (srInput) {
+              const val = srInput.value.trim();
+              if (val === '') fftSampleRateOverride = null;
+              else { const n = parseFloat(val); if (!isNaN(n) && n > 0) fftSampleRateOverride = n; }
+            }
             // Re-render chart with new params
             saveZoomState();
             renderChart();
@@ -2418,24 +2571,41 @@
       const clampedEnd = Math.min(rows.length, Math.max(clampedStart + 2, endIdx));
 
       // Compute sample rate and FFT
-      let sampleRate = detectSampleRate(rows, timeColumn);
-      const fftResult = computeFFT(rows, varName, clampedStart, clampedEnd);
+      const srInfo = detectSampleRate(rows, timeColumn);
+      let sampleRate = fftSampleRateOverride !== null ? fftSampleRateOverride : srInfo.sampleRate;
+      const fftResult = computeFFT(rows, varName, clampedStart, clampedEnd, sampleRate);
 
       // Build frequency axis and magnitude data
       let freqData = [];
       let magData = [];
+      // Harmonic markLines
+      let markLines = [];
+      let autoDetectedF0 = null;
+      let f0confidence = 'unknown';
+
       if (fftResult) {
-        const baseFreq = sampleRate / fftResult.fftSize;
-        const freqs = new Float64Array(fftResult.numBins);
-        for (let i = 0; i < fftResult.numBins; i++) {
-          freqs[i] = i * baseFreq;
+        // Fundamental frequency: auto-detect or manual
+        let baseFreq;
+        if (fftBaseFreq !== null && fftBaseFreq > 0) {
+          const nyquist = sampleRate / 2;
+          const minFreq = sampleRate / Math.max(fftResult.dataLength, 2);
+          baseFreq = Math.max(minFreq, Math.min(fftBaseFreq, nyquist));
+          f0confidence = 'manual';
+        } else {
+          const detected = autoDetectBaseFreq(fftResult.magnitudes, fftResult.freqs, sampleRate, fftResult.fftSize);
+          baseFreq = detected.freq;
+          f0confidence = detected.confidence || 'unknown';
+          autoDetectedF0 = baseFreq;
         }
-        const convertedFreqs = convertFreqUnit(freqs, fftFreqUnit);
+
+        // Use the corrected frequency axis from FFT result
+        const convertedFreqs = convertFreqUnit(fftResult.freqs, fftFreqUnit);
 
         let magnitudes = fftResult.magnitudes;
         if (fftYAxis === 'per-unit') {
+          // Per-unit: normalize to max magnitude, excluding DC (index 0)
           let maxMag = 0;
-          for (let i = 0; i < magnitudes.length; i++) {
+          for (let i = 1; i < magnitudes.length; i++) {
             if (magnitudes[i] > maxMag) maxMag = magnitudes[i];
           }
           if (maxMag > 0) {
@@ -2443,6 +2613,37 @@
             for (let i = 0; i < magnitudes.length; i++) scaled[i] = magnitudes[i] / maxMag;
             magnitudes = scaled;
           }
+        } else if (fftYAxis === 'db') {
+          // dB: 20*log10(magnitude), referenced to max (excluding DC)
+          let refMag = 1.0;
+          for (let i = 1; i < magnitudes.length; i++) {
+            if (magnitudes[i] > refMag) refMag = magnitudes[i];
+          }
+          const dbFloor = -120;
+          const converted = new Float64Array(magnitudes.length);
+          for (let i = 0; i < magnitudes.length; i++) {
+            const val = magnitudes[i] / refMag;
+            converted[i] = val > 1e-10 ? 20 * Math.log10(val) : dbFloor;
+          }
+          magnitudes = converted;
+        } else if (fftBaseFreq !== null && fftBaseFreq > 0 && autoDetectedF0 === null) {
+          // If manual f0 is set, normalise to fundamental magnitude
+          autoDetectedF0 = baseFreq;
+        }
+
+        // Harmonic markLines at f0, 2f0, 3f0... up to Nyquist (max 20)
+        const nyquistLimit = sampleRate / 2;
+        const f0 = baseFreq;
+        for (let h = 1; h <= 20; h++) {
+          const harmonicFreq = h * f0;
+          if (harmonicFreq > nyquistLimit * 0.99) break;
+          const displayFreq = fftFreqUnit === 'rad/s' ? harmonicFreq * 2 * Math.PI
+            : fftFreqUnit === 'deg/s' ? harmonicFreq * 360 : harmonicFreq;
+          markLines.push({
+            xAxis: displayFreq,
+            lineStyle: { type: 'dashed', color: h === 1 ? 'rgba(239,68,68,0.5)' : 'rgba(156,163,175,0.25)', width: h === 1 ? 1.5 : 0.5 },
+            label: { show: h === 1, formatter: h + '×', position: 'start', color: 'rgba(239,68,68,0.7)', fontSize: 10 },
+          });
         }
 
         freqData = Array.from(convertedFreqs);
@@ -2504,7 +2705,7 @@
         yAxis: [
           {
             type: 'value',
-            name: fftYAxis === 'per-unit' ? t('fft_per_unit') : t('fft_physical'),
+            name: fftYAxis === 'db' ? t('fft_db') : fftYAxis === 'per-unit' ? t('fft_per_unit') : t('fft_physical'),
             nameTextStyle: { fontSize: 11, color: tc.text },
             axisLabel: { color: tc.text, fontSize: 10 },
             splitLine: { lineStyle: { color: tc.splitLine } },
@@ -2529,6 +2730,11 @@
             barWidth: Math.max(1, (freqData.length > 1 ? (freqData[freqData.length - 1] - freqData[0]) / freqData.length * 0.8 : 1)),
             itemStyle: { color: '#3b82f6' },
             sampling: freqData.length > SAMPLING_THRESHOLD ? 'lttb' : undefined,
+            markLine: markLines.length > 0 ? {
+              silent: true,
+              symbol: 'none',
+              data: markLines,
+            } : undefined,
           },
           {
             name: varName,
@@ -2580,24 +2786,56 @@
           const cs = Math.max(0, sIdx);
           const ce = Math.min(rows.length, Math.max(cs + 2, eIdx));
 
-          const sr = detectSampleRate(rows, timeColumn);
-          const result = computeFFT(rows, varName, cs, ce);
+          const srInfo = detectSampleRate(rows, timeColumn);
+          const sr = fftSampleRateOverride !== null ? fftSampleRateOverride : srInfo.sampleRate;
+          const result = computeFFT(rows, varName, cs, ce, sr);
 
           if (result) {
-            const bFreq = sr / result.fftSize;
-            const freqs = new Float64Array(result.numBins);
-            for (let i = 0; i < result.numBins; i++) freqs[i] = i * bFreq;
-            const convFreqs = convertFreqUnit(freqs, fftFreqUnit);
+            // Fundamental freq: auto-detect or manual
+            let bFreq;
+            if (fftBaseFreq !== null && fftBaseFreq > 0) {
+              bFreq = Math.max(sr / Math.max(result.dataLength, 2), Math.min(fftBaseFreq, sr / 2));
+            } else {
+              const detected = autoDetectBaseFreq(result.magnitudes, result.freqs, sr, result.fftSize);
+              bFreq = detected.freq;
+            }
+
+            // Use the corrected frequency axis from FFT result
+            const convFreqs = convertFreqUnit(result.freqs, fftFreqUnit);
 
             let mags = result.magnitudes;
             if (fftYAxis === 'per-unit') {
               let maxM = 0;
-              for (let i = 0; i < mags.length; i++) { if (mags[i] > maxM) maxM = mags[i]; }
+              for (let i = 1; i < mags.length; i++) { if (mags[i] > maxM) maxM = mags[i]; }
               if (maxM > 0) {
                 const scaled = new Float64Array(mags.length);
                 for (let i = 0; i < mags.length; i++) scaled[i] = mags[i] / maxM;
                 mags = scaled;
               }
+            } else if (fftYAxis === 'db') {
+              let refMag = 1.0;
+              for (let i = 1; i < mags.length; i++) { if (mags[i] > refMag) refMag = mags[i]; }
+              const dbFloor = -120;
+              const converted = new Float64Array(mags.length);
+              for (let i = 0; i < mags.length; i++) {
+                const val = mags[i] / refMag;
+                converted[i] = val > 1e-10 ? 20 * Math.log10(val) : dbFloor;
+              }
+              mags = converted;
+            }
+
+            // Harmonic markLines (max 20)
+            const liveMarkLines = [];
+            const nyq = sr / 2;
+            for (let h = 1; h <= 20; h++) {
+              const hf = h * bFreq;
+              if (hf > nyq * 0.99) break;
+              const df = fftFreqUnit === 'rad/s' ? hf * 2 * Math.PI : fftFreqUnit === 'deg/s' ? hf * 360 : hf;
+              liveMarkLines.push({
+                xAxis: df,
+                lineStyle: { type: 'dashed', color: h === 1 ? 'rgba(239,68,68,0.5)' : 'rgba(156,163,175,0.25)', width: h === 1 ? 1.5 : 0.5 },
+                label: { show: h === 1, formatter: h + '×', position: 'start', color: 'rgba(239,68,68,0.7)', fontSize: 10 },
+              });
             }
 
             const newFreqData = Array.from(convFreqs);
@@ -2610,6 +2848,7 @@
               series: [{
                 data: newFreqData.map((f, i) => [f, newMagData[i]]),
                 barWidth: Math.max(1, (newFreqData.length > 1 ? (newFreqData[newFreqData.length - 1] - newFreqData[0]) / newFreqData.length * 0.8 : 1)),
+                markLine: liveMarkLines.length > 0 ? { silent: true, symbol: 'none', data: liveMarkLines } : undefined,
               }],
             });
           }
@@ -2620,6 +2859,19 @@
       if (chartInstance) {
         chartInstance.off('datazoom', fftDataZoomHandler);
         chartInstance.on('datazoom', fftDataZoomHandler);
+      }
+
+      // Update the hint to show sample rate and auto-detected f0
+      const hint = document.querySelector('#fftNyquistHint');
+      if (hint) {
+        let parts = [];
+        parts.push('fs=' + sampleRate.toFixed(1) + ' Hz');
+        if (autoDetectedF0 !== null) {
+          parts.push('f₀=' + autoDetectedF0.toFixed(2) + ' Hz');
+          if (f0confidence === 'low' || f0confidence === 'unknown') parts.push('⚠');
+        }
+        if (srInfo.confidence !== 'high') parts.push('⚠');
+        hint.textContent = parts.join(' ');
       }
 
       return option;
