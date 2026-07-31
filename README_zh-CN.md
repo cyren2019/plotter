@@ -2,9 +2,10 @@
 
 # 📈 Plotter — 时序数据绘图工具
 
-一个基于浏览器的轻量级数据可视化工具，支持 CSV 与 Excel 文件导入，自动生成**时序图**、**XY 散点图**与 **XYZ 3D 散点图**。零构建、零依赖运行时，打开即用。
+一个基于浏览器的轻量级数据可视化工具，支持 CSV 与 Excel 文件导入，自动生成**时序图**、**XY 散点图**、**XYZ 3D 散点图**与 **FFT 频谱分析**。零构建、零依赖运行时，打开即用。
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
+![Version](https://img.shields.io/badge/version-v1.2.0-blue)
 
 ---
 
@@ -21,7 +22,7 @@
 - 包括 ISO 8601、Excel 序列号、中文日期（`2024年1月1日`）、紧凑格式（`YYYYMMDDHHmmss`）等
 - 支持毫秒级精度与 `HH时mm分ss秒` 中文时间表达
 
-### 三种图表模式
+### 四种图表模式
 
 | 模式 | 说明 | 变量数 |
 |------|------|--------|
@@ -29,6 +30,17 @@
 | **时序图 · 分图** | 每变量独立子图，独立 Y 轴，支持框选缩放 | 1–10 |
 | **XY 散点图** | 双变量二维散点 | 2 |
 | **XYZ 3D 图** | 三变量三维散点（需 echarts-gl） | 3 |
+| **FFT 频谱** | FFT 频域分析，含谐波标记 | 1 |
+
+### FFT 频谱分析 (v1.2.0)
+- 通过 dataZoom 滑块实时 FFT 所选时间范围
+- Hann 窗 + 相干增益补偿，物理值模式显示正确幅值
+- 基于谐波评分的基频自动检测
+- 谐波标记线（f₀, 2f₀, 3f₀, …）
+- 多种 Y 轴模式：物理值（绝对值）、标幺值（归一化）、dB（对数坐标）
+- 频率单位可切换：Hz、rad/s、deg/s
+- 手动采样率覆盖（适用于非时间戳数据）
+- 基频支持自动检测或手动设定
 
 ### 交互操作
 - 🖱️ 滚轮 / 拖拽缩放、平移
@@ -54,7 +66,7 @@
 - **图像复位**：一键恢复初始缩放范围
 - **缩放记忆**：切换变量/模式时保留当前缩放位置
 
-### ⚡ 性能优化 (v1.1.1)
+### ⚡ 性能优化
 - **ECharts 实例复用**：图表实例跨渲染复用 — `setOption()` 替代每次 dispose+reinit（单次交互提升约 10-50 倍）
 - **定向 DOM 更新**：变量勾选和模式切换使用轻量 class/DOM 操作替代全量 `renderApp()` 重建
 - **搜索防抖**：变量搜索 150ms 防抖 + CSS visibility 过滤 — 按键不再触发 DOM 重建
@@ -98,9 +110,10 @@ python3 -m http.server 8080 -d plotter-app
 1. **导入数据** — 拖放文件到页面，或点击右上角「导入」按钮
 2. **选择时间列** — 左侧栏顶部下拉菜单选择作为时间轴的列
 3. **选择变量** — 勾选需要绘制的变量名
-4. **切换图表** — 顶部标签栏切换 时序图 / XY图 / XYZ图
+4. **切换图表** — 顶部标签栏切换 时序图 / XY图 / XYZ图 / FFT
 5. **时序图模式** — 右侧「合并 / 分图」切换显示方式
-6. **主题切换** — 右上角「明亮 / 黑暗」按钮
+6. **FFT 分析** — 选择 1 个变量，根据需要调整采样率和基频，点击应用
+7. **主题切换** — 右上角「明亮 / 黑暗」按钮
 
 ---
 
@@ -109,19 +122,22 @@ python3 -m http.server 8080 -d plotter-app
 ```
 plotter/
 ├── plotter-app/
-│   ├── index.html          # 完整应用（HTML + CSS + JS，约 1860 行）
-│   ├── lib/                # 第三方库（CDN 离线化）
-│   │   ├── dayjs.min.js            # 日期解析 (v1.x)
-│   │   ├── customParseFormat.js    # dayjs 严格解析插件
-│   │   ├── xlsx.full.min.js        # Excel 解析 (SheetJS)
-│   │   ├── echarts.min.js          # 图表引擎 (Apache ECharts)
-│   │   └── echarts-gl.min.js       # 3D 图表扩展
-│   └── public/             # 静态资源
+│   ├── index.html              # 完整应用（HTML + CSS + JS，约 2890 行）
+│   ├── test_fft.csv            # FFT 测试数据（50 Hz 正弦波、含谐波、方波）
+│   ├── lib/                    # 第三方库（CDN 离线化）
+│   │   ├── dayjs.min.js                # 日期解析 (v1.x)
+│   │   ├── customParseFormat.js        # dayjs 严格解析插件
+│   │   ├── xlsx.full.min.js            # Excel 解析 (SheetJS)
+│   │   ├── echarts.min.js              # 图表引擎 (Apache ECharts)
+│   │   ├── echarts-gl.min.js           # 3D 图表扩展
+│   │   └── fourier-transform.js        # FFT 库 (v2.4.1)
+│   └── public/                 # 静态资源
 │       ├── favicon.svg
 │       └── icons.svg
 ├── .gitignore
 ├── README.md
-└── README_zh-CN.md
+├── README_zh-CN.md
+└── CLAUDE.md
 ```
 
 ---
@@ -136,6 +152,7 @@ plotter/
 | **时间解析** | 双阶段：dayjs 原生解析 → 20+ 格式严格匹配 → 宽松匹配兜底 |
 | **CSV 解析** | 自定义解析器，支持引号转义、分隔符自动检测、编码回退 |
 | **Excel 解析** | SheetJS (`xlsx.full.min.js`)，读取首个 Sheet |
+| **FFT 分析** | Hann 窗 → 零填充至 2 的幂 → RFFT → 相干增益补偿 → 谐波评分基频检测 |
 | **图表引擎** | Apache ECharts 5.x + echarts-gl（3D 支持） |
 
 ### 数据流
@@ -143,6 +160,13 @@ plotter/
 ```
 文件导入 → 编码检测 → CSV/Excel 解析 → 时间列自动识别
     → 变量列表渲染 → 用户选择 → ECharts 图表生成
+```
+
+### FFT 数据流
+
+```
+变量选择 → 缩放范围 → 提取数值 → Hann 窗 → 零填充 → RFFT
+    → 增益补偿 → 频率轴 → 基频检测 → 频谱图 + 谐波标记
 ```
 
 ### 编码回退策略
@@ -176,6 +200,9 @@ UTF-8 (strict) → GB18030 (兼容 GBK/GB2312) → UTF-8 (lenient)
 - `renderChart()` — ECharts 实例创建与配置
 - `buildTimeSeriesOption()` — 时序图配置生成（合并/分图）
 - `buildXYOption()` / `buildXYZOption()` — 散点图配置生成
+- `buildFFTOption()` — FFT 频谱图配置生成
+- `computeFFT()` — FFT 计算，含 Hann 窗和增益补偿
+- `autoDetectBaseFreq()` — 谐波评分基频检测
 - `detectBinaryColumns()` — 二进制变量自动检测
 - `getBitColor()` / `setBinaryMode()` — 按位拆分颜色与模式切换
 
@@ -192,5 +219,6 @@ MIT
 - [Apache ECharts](https://echarts.apache.org/) — 图表渲染引擎
 - [dayjs](https://day.js.org/) — 轻量日期解析库
 - [SheetJS](https://sheetjs.com/) — Excel 文件解析
-- [openCode](https://github.com/anomalyco/opencode)
-- [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent)
+- [fourier-transform](https://www.npmjs.com/package/fourier-transform) — FFT 库
+- [Claude Code](https://claude.ai/code) — AI 辅助开发工具
+- [oh-my-claudecode](https://github.com/code-yeongyu/oh-my-openagent) — Claude Code 增强工具集

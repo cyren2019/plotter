@@ -2,9 +2,10 @@
 
 # 📈 Plotter — Time-Series Data Visualization Tool
 
-A browser-based lightweight data visualization tool supporting CSV and Excel file imports. Automatically generates **time-series charts**, **XY scatter plots**, and **XYZ 3D scatter plots**. Zero build steps, zero runtime dependencies — open and go.
+A browser-based lightweight data visualization tool supporting CSV and Excel file imports. Automatically generates **time-series charts**, **XY scatter plots**, **XYZ 3D scatter plots**, and **FFT spectrum analysis**. Zero build steps, zero runtime dependencies — open and go.
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
+![Version](https://img.shields.io/badge/version-v1.2.0-blue)
 
 ---
 
@@ -21,7 +22,7 @@ A browser-based lightweight data visualization tool supporting CSV and Excel fil
 - Includes ISO 8601, Excel serial numbers, Chinese dates (`2024年1月1日`), compact formats (`YYYYMMDDHHmmss`), and more
 - Millisecond precision and Chinese time expressions (`HH时mm分ss秒`)
 
-### Three Chart Modes
+### Four Chart Modes
 
 | Mode | Description | Variables |
 |------|-------------|-----------|
@@ -29,6 +30,17 @@ A browser-based lightweight data visualization tool supporting CSV and Excel fil
 | **Time-Series · Separate** | Independent subplot per variable, individual Y-axis with area zoom | 1–10 |
 | **XY Scatter** | Two-variable 2D scatter | 2 |
 | **XYZ 3D** | Three-variable 3D scatter (requires echarts-gl) | 3 |
+| **FFT Spectrum** | FFT frequency-domain analysis with harmonic markers | 1 |
+
+### FFT Spectrum Analysis (v1.2.0)
+- Real-time FFT of selected time range via dataZoom slider
+- Hann window with coherent gain compensation for accurate amplitude
+- Fundamental frequency auto-detection using harmonic scoring
+- Harmonic marker lines at f₀, 2f₀, 3f₀, …
+- Multiple Y-axis modes: Physical (absolute), Per-Unit (normalized), dB (logarithmic)
+- Configurable frequency units: Hz, rad/s, deg/s
+- Manual sample rate override for non-timestamp data
+- Automatic or manual fundamental frequency setting
 
 ### Interactions
 - 🖱️ Scroll / drag to zoom and pan
@@ -54,7 +66,7 @@ A browser-based lightweight data visualization tool supporting CSV and Excel fil
 - **View Reset**: One-click restore to initial zoom range
 - **Zoom Memory**: Preserves current zoom position when switching variables/modes
 
-### ⚡ Performance Optimizations (v1.1.1)
+### ⚡ Performance Optimizations
 - **ECharts Instance Reuse**: Chart instance persists across renders — `setOption()` replaces full dispose+reinit (~10-50x faster per interaction)
 - **Targeted DOM Updates**: Variable selection and mode toggles use lightweight class/DOM manipulation instead of full `renderApp()` rebuild
 - **Search Debouncing**: Variable search input debounced at 150ms with CSS visibility filtering — no DOM recreation on keystroke
@@ -98,9 +110,10 @@ python3 -m http.server 8080 -d plotter-app
 1. **Import Data** — Drag and drop a file onto the page, or click the "Import" button in the top-right corner
 2. **Select Time Column** — Use the dropdown at the top of the sidebar to choose the time axis column
 3. **Select Variables** — Check the variable names you want to plot
-4. **Switch Chart Type** — Use the top tabs to switch between Time-Series / XY / XYZ
+4. **Switch Chart Type** — Use the top tabs to switch between Time-Series / XY / XYZ / FFT
 5. **Time-Series Mode** — Toggle between "Merged" and "Separate" display on the right
-6. **Theme Toggle** — Use the "Light / Dark" button in the top-right corner
+6. **FFT Analysis** — Select 1 variable, adjust sample rate and fundamental frequency if needed, click Apply
+7. **Theme Toggle** — Use the "Light / Dark" button in the top-right corner
 
 ---
 
@@ -109,19 +122,22 @@ python3 -m http.server 8080 -d plotter-app
 ```
 plotter/
 ├── plotter-app/
-│   ├── index.html          # Full application (HTML + CSS + JS, ~1860 lines)
-│   ├── lib/                # Third-party libraries (offline CDN copies)
-│   │   ├── dayjs.min.js            # Date parsing (v1.x)
-│   │   ├── customParseFormat.js    # dayjs strict format plugin
-│   │   ├── xlsx.full.min.js        # Excel parsing (SheetJS)
-│   │   ├── echarts.min.js          # Chart engine (Apache ECharts)
-│   │   └── echarts-gl.min.js       # 3D chart extension
-│   └── public/             # Static assets
+│   ├── index.html              # Full application (HTML + CSS + JS, ~2890 lines)
+│   ├── test_fft.csv            # Sample FFT test data (50 Hz sine, harmonics, square wave)
+│   ├── lib/                    # Third-party libraries (offline CDN copies)
+│   │   ├── dayjs.min.js                # Date parsing (v1.x)
+│   │   ├── customParseFormat.js        # dayjs strict format plugin
+│   │   ├── xlsx.full.min.js            # Excel parsing (SheetJS)
+│   │   ├── echarts.min.js              # Chart engine (Apache ECharts)
+│   │   ├── echarts-gl.min.js           # 3D chart extension
+│   │   └── fourier-transform.js        # FFT library (v2.4.1)
+│   └── public/                 # Static assets
 │       ├── favicon.svg
 │       └── icons.svg
 ├── .gitignore
 ├── README.md
-└── README_zh-CN.md
+├── README_zh-CN.md
+└── CLAUDE.md
 ```
 
 ---
@@ -136,6 +152,7 @@ plotter/
 | **Time Parsing** | Two-stage: dayjs native parsing → 20+ format strict matching → loose fallback |
 | **CSV Parsing** | Custom parser with quote escaping, delimiter auto-detection, encoding fallback |
 | **Excel Parsing** | SheetJS (`xlsx.full.min.js`), reads the first sheet |
+| **FFT Analysis** | Hann window → zero-pad to power-of-2 → RFFT via `fourier-transform.js` → coherent gain compensation → harmonic scoring fundamental detection |
 | **Chart Engine** | Apache ECharts 5.x + echarts-gl (3D support) |
 
 ### Data Flow
@@ -143,6 +160,13 @@ plotter/
 ```
 File Import → Encoding Detection → CSV/Excel Parsing → Time Column Auto-Detection
     → Variable List Rendering → User Selection → ECharts Chart Generation
+```
+
+### FFT Data Flow
+
+```
+Variable Selection → Zoom Range → Extract Values → Hann Window → Zero-Pad → RFFT
+    → Gain Compensation → Frequency Axis → Fundamental Detection → Spectrum + Harmonics
 ```
 
 ### Encoding Fallback Strategy
@@ -176,6 +200,9 @@ Key functions:
 - `renderChart()` — ECharts instance creation and configuration
 - `buildTimeSeriesOption()` — Time-series chart option generation (merged/separate)
 - `buildXYOption()` / `buildXYZOption()` — Scatter plot option generation
+- `buildFFTOption()` — FFT spectrum chart option generation
+- `computeFFT()` — FFT computation with Hann window and gain compensation
+- `autoDetectBaseFreq()` — Fundamental frequency detection via harmonic scoring
 - `detectBinaryColumns()` — Binary variable auto-detection
 - `getBitColor()` / `setBinaryMode()` — Bit-level color assignment and mode toggle
 
@@ -192,5 +219,6 @@ MIT
 - [Apache ECharts](https://echarts.apache.org/) — Chart rendering engine
 - [dayjs](https://day.js.org/) — Lightweight date parsing library
 - [SheetJS](https://sheetjs.com/) — Excel file parsing
-- [openCode](https://github.com/anomalyco/opencode)
-- [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent)
+- [fourier-transform](https://www.npmjs.com/package/fourier-transform) — FFT library
+- [Claude Code](https://claude.ai/code) — AI-powered development assistant
+- [oh-my-claudecode](https://github.com/code-yeongyu/oh-my-openagent) — Claude Code enhancement toolkit
