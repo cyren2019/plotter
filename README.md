@@ -213,12 +213,3 @@ Key functions:
 MIT
 
 ---
-
-## 🙏 Acknowledgments
-
-- [Apache ECharts](https://echarts.apache.org/) — Chart rendering engine
-- [dayjs](https://day.js.org/) — Lightweight date parsing library
-- [SheetJS](https://sheetjs.com/) — Excel file parsing
-- [fourier-transform](https://www.npmjs.com/package/fourier-transform) — FFT library
-- [Claude Code](https://claude.ai/code) — AI-powered development assistant
-- [oh-my-claudecode](https://github.com/code-yeongyu/oh-my-openagent) — Claude Code enhancement toolkit

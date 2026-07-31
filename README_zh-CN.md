@@ -214,11 +214,3 @@ MIT
 
 ---
 
-## 🙏 致谢
-
-- [Apache ECharts](https://echarts.apache.org/) — 图表渲染引擎
-- [dayjs](https://day.js.org/) — 轻量日期解析库
-- [SheetJS](https://sheetjs.com/) — Excel 文件解析
-- [fourier-transform](https://www.npmjs.com/package/fourier-transform) — FFT 库
-- [Claude Code](https://claude.ai/code) — AI 辅助开发工具
-- [oh-my-claudecode](https://github.com/code-yeongyu/oh-my-openagent) — Claude Code 增强工具集
