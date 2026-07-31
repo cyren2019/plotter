@@ -399,6 +399,46 @@
       backdrop-filter: blur(4px);
     }
 
+    /* FFT Parameter Panel */
+    .fft-panel {
+      display: flex; align-items: center; gap: 12px;
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0; flex-wrap: wrap;
+    }
+    .fft-panel-row {
+      display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    }
+    .fft-label {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px; color: var(--text); white-space: nowrap;
+    }
+    .fft-label > span:first-child { opacity: 0.7; }
+    .fft-num-input {
+      width: 80px; padding: 3px 6px; font-size: 11px;
+      border: 1px solid var(--border); border-radius: 4px;
+      background: var(--bg); color: var(--text);
+      outline: none; font-family: inherit;
+    }
+    .fft-num-input:focus { border-color: var(--accent-border); }
+    .fft-num-input::placeholder { color: var(--text); opacity: 0.3; font-style: italic; }
+    .fft-unit-label { font-size: 10px; color: var(--text); opacity: 0.5; margin-left: 2px; }
+    .fft-freq-input-group { display: flex; align-items: center; gap: 2px; }
+    .fft-segmented {
+      display: flex; align-items: center; gap: 0; padding: 2px;
+      background: var(--border); border-radius: 5px;
+    }
+    .fft-seg-btn {
+      padding: 3px 8px; font-size: 10px; font-family: inherit;
+      border: none; background: transparent; color: var(--text);
+      cursor: pointer; border-radius: 4px; transition: all 0.15s; white-space: nowrap;
+    }
+    .fft-seg-btn:hover { color: var(--accent); }
+    .fft-seg-btn.active {
+      background: var(--bg); color: var(--accent);
+      font-weight: 500; box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+
     /* Drag overlay */
     .drag-overlay {
       display: none;
@@ -505,6 +545,7 @@
   <script src="lib/xlsx.full.min.js"></script>
   <script src="lib/echarts.min.js"></script>
   <script src="lib/echarts-gl.min.js"></script>
+  <script src="lib/fourier-transform.js"></script>
 
   <script>
     // ===================== Time Parser =====================
@@ -815,6 +856,20 @@
         bin_toggle_dec: '切换至十进制',
         bin_toggle_bin: '切换至二进制',
         bin_disabled: '仅在时序图分图模式下可用',
+        fft_plot: 'FFT分析',
+        fft_base_freq: '基频',
+        fft_freq_unit: '频率单位',
+        fft_y_axis: 'Y轴',
+        fft_x_axis: 'X轴',
+        fft_apply: '应用',
+        fft_per_unit: '标幺值',
+        fft_physical: '物理值',
+        fft_linear: '笛卡尔坐标',
+        fft_log: '对数坐标',
+        fft_auto: '自动',
+        msg_fft_need: 'FFT模式需要选择1个变量',
+        msg_fft_no_data: '所选范围内有效数据不足，无法进行FFT分析',
+        mode_fft: 'FFT 频谱分析',
         lang_label: 'EN',
         lang_title: 'Switch to English',
       },
@@ -854,6 +909,20 @@
         bin_toggle_dec: 'Switch to Decimal',
         bin_toggle_bin: 'Switch to Binary',
         bin_disabled: 'Only available in time-series separate mode',
+        fft_plot: 'FFT Analysis',
+        fft_base_freq: 'Base Freq',
+        fft_freq_unit: 'Freq Unit',
+        fft_y_axis: 'Y-Axis',
+        fft_x_axis: 'X-Axis',
+        fft_apply: 'Apply',
+        fft_per_unit: 'Per-Unit',
+        fft_physical: 'Physical',
+        fft_linear: 'Linear',
+        fft_log: 'Logarithmic',
+        fft_auto: 'Auto',
+        msg_fft_need: 'FFT mode requires 1 variable selected',
+        msg_fft_no_data: 'Not enough valid data in range for FFT analysis',
+        mode_fft: 'FFT Spectrum',
         lang_label: 'CN',
         lang_title: '切换到中文',
       }
@@ -962,6 +1031,15 @@
     let binaryBits = new Map();         // column name → bit count (8 or 16)
     let binaryMode = new Map();         // column name → 'dec' | 'bin'
 
+    // ===================== FFT State =====================
+    let fftBaseFreq = null;        // null = auto-detect from time data
+    let fftFreqUnit = 'Hz';        // 'Hz' | 'rad/s' | 'deg/s'
+    let fftYAxis = 'per-unit';     // 'per-unit' | 'physical'
+    let fftXAxis = 'linear';       // 'linear' | 'log'
+    let fftDataZoomStart = 0;      // current dataZoom start percentage
+    let fftDataZoomEnd = 100;      // current dataZoom end percentage
+    let fftDataZoomHandler = null; // debounced dataZoom event handler reference
+
     // ===================== DOM Elements =====================
     const app = document.getElementById('app');
     const mainArea = document.getElementById('mainArea');
@@ -976,6 +1054,88 @@
     const errorClose = document.getElementById('errorClose');
     const themeToggle = document.getElementById('themeToggle');
     const themeIcon = document.getElementById('themeIcon');
+
+    // ===================== FFT Computation =====================
+    function nextPowerOf2(n) {
+      if (n < 2) return 2;
+      let p = 1;
+      while (p < n) p <<= 1;
+      return p;
+    }
+
+    function hannWindow(N) {
+      const w = new Float64Array(N);
+      for (let i = 0; i < N; i++) {
+        w[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (N - 1)));
+      }
+      return w;
+    }
+
+    function detectSampleRate(rows, timeColumn) {
+      // If time values are Date objects, compute sample rate from average delta
+      let totalDelta = 0;
+      let count = 0;
+      let prevDate = null;
+      for (let i = 0; i < rows.length; i++) {
+        const val = rows[i][timeColumn];
+        if (val instanceof Date) {
+          if (prevDate !== null) {
+            const delta = (val - prevDate) / 1000; // seconds
+            if (delta > 0) {
+              totalDelta += delta;
+              count++;
+            }
+          }
+          prevDate = val;
+        }
+      }
+      if (count > 0) {
+        const avgDelta = totalDelta / count;
+        return 1 / avgDelta; // Hz
+      }
+      return 1; // normalized frequency (unitless)
+    }
+
+    function convertFreqUnit(freqs, unit) {
+      if (unit === 'Hz') return freqs;
+      const factor = unit === 'rad/s' ? 2 * Math.PI : unit === 'deg/s' ? 360 : 1;
+      const result = new Float64Array(freqs.length);
+      for (let i = 0; i < freqs.length; i++) result[i] = freqs[i] * factor;
+      return result;
+    }
+
+    function computeFFT(rows, varName, startIdx, endIdx) {
+      // Extract non-null values from the selected range
+      const rawValues = [];
+      for (let i = startIdx; i < endIdx && i < rows.length; i++) {
+        const val = rows[i][varName];
+        if (val !== null && val !== undefined && Number.isFinite(Number(val))) {
+          rawValues.push(Number(val));
+        }
+      }
+
+      if (rawValues.length < 2) return null;
+
+      // Determine FFT size: next power of 2
+      const fftSize = nextPowerOf2(rawValues.length);
+      const window = hannWindow(rawValues.length);
+      const padded = new Float64Array(fftSize);
+      for (let i = 0; i < rawValues.length; i++) {
+        padded[i] = rawValues[i] * window[i];
+      }
+      // Rest is already zero (zero-padded)
+
+      const magnitudes = FourierTransform.rfft(padded);
+      // rfft returns N/2 bins (DC at index 0, then positive frequencies)
+      const numBins = magnitudes.length;
+
+      return {
+        magnitudes: magnitudes,
+        numBins: numBins,
+        fftSize: fftSize,
+        dataLength: rawValues.length,
+      };
+    }
 
     // ===================== Version Check =====================
     const CURRENT_VERSION = 'v1.1.4';
@@ -1404,19 +1564,57 @@
           <button class="btn ${plotType === 'time-series' ? 'active' : ''}" data-type="time-series">${t('time_series')}</button>
           <button class="btn ${plotType === 'xy' ? 'active' : ''}" data-type="xy">${t('xy_plot')}</button>
           <button class="btn ${plotType === 'xyz' ? 'active' : ''}" data-type="xyz">${t('xyz_plot')}</button>
-          <div style="display: ${tsToggleVisible ? 'flex' : 'none'}; align-items: center; gap: 4px; margin-left: auto;">
-            <div class="ts-toggle" data-ts="auto-scale" style="display: ${timeSeriesMode === 'separate' ? 'flex' : 'none'}">
+          <button class="btn ${plotType === 'fft' ? 'active' : ''}" data-type="fft">${t('fft_plot')}</button>
+          <div style="display: ${(tsToggleVisible || plotType === 'fft') ? 'flex' : 'none'}; align-items: center; gap: 4px; margin-left: auto;">
+            <div class="ts-toggle" data-ts="auto-scale" style="display: ${timeSeriesMode === 'separate' && plotType !== 'fft' ? 'flex' : 'none'}">
               <button class="btn ${separateAutoScale ? 'active' : ''}" data-auto-scale="toggle">${t('auto_scale')}</button>
             </div>
             <div class="ts-toggle">
               <button class="btn" data-reset="zoom">${t('reset_zoom')}</button>
             </div>
-            <div class="ts-toggle">
+            <div class="ts-toggle" style="display: ${plotType === 'fft' ? 'none' : ''}">
               <button class="btn ${timeSeriesMode === 'merged' ? 'active' : ''}" data-mode="merged">${t('merged')}</button>
               <button class="btn ${timeSeriesMode === 'separate' ? 'active' : ''}" data-mode="separate">${t('separate')}</button>
             </div>
           </div>
         </nav>
+        <div class="fft-panel" style="display: ${plotType === 'fft' ? 'flex' : 'none'};">
+          <div class="fft-panel-row">
+            <label class="fft-label">
+              <span>${t('fft_base_freq')}</span>
+              <div class="fft-freq-input-group">
+                <input type="number" class="fft-num-input" id="fftBaseFreqInput"
+                       value="${fftBaseFreq !== null ? fftBaseFreq : ''}"
+                       placeholder="${t('fft_auto')}"
+                       step="any" min="0.001">
+                <span class="fft-unit-label">Hz</span>
+              </div>
+            </label>
+            <label class="fft-label">
+              <span>${t('fft_freq_unit')}</span>
+              <div class="fft-segmented">
+                <button class="fft-seg-btn ${fftFreqUnit === 'Hz' ? 'active' : ''}" data-fft-param="freqUnit" data-value="Hz">Hz</button>
+                <button class="fft-seg-btn ${fftFreqUnit === 'rad/s' ? 'active' : ''}" data-fft-param="freqUnit" data-value="rad/s">rad/s</button>
+                <button class="fft-seg-btn ${fftFreqUnit === 'deg/s' ? 'active' : ''}" data-fft-param="freqUnit" data-value="deg/s">deg/s</button>
+              </div>
+            </label>
+            <label class="fft-label">
+              <span>${t('fft_y_axis')}</span>
+              <div class="fft-segmented">
+                <button class="fft-seg-btn ${fftYAxis === 'per-unit' ? 'active' : ''}" data-fft-param="yAxis" data-value="per-unit">${t('fft_per_unit')}</button>
+                <button class="fft-seg-btn ${fftYAxis === 'physical' ? 'active' : ''}" data-fft-param="yAxis" data-value="physical">${t('fft_physical')}</button>
+              </div>
+            </label>
+            <label class="fft-label">
+              <span>${t('fft_x_axis')}</span>
+              <div class="fft-segmented">
+                <button class="fft-seg-btn ${fftXAxis === 'linear' ? 'active' : ''}" data-fft-param="xAxis" data-value="linear">${t('fft_linear')}</button>
+                <button class="fft-seg-btn ${fftXAxis === 'log' ? 'active' : ''}" data-fft-param="xAxis" data-value="log">${t('fft_log')}</button>
+              </div>
+            </label>
+            <button class="btn btn-primary" id="fftApplyBtn">${t('fft_apply')}</button>
+          </div>
+        </div>
         <div class="plot-label"><span>${getModeLabel()}</span></div>
         <div class="plot-container">
           <div id="chart"></div>
@@ -1432,6 +1630,14 @@
             for (const col of binaryColumns) {
               binaryMode.set(col, 'dec');
             }
+          }
+          // Cleanup FFT handler when switching away
+          if (plotType !== 'fft') {
+            if (fftDataZoomHandler && fftDataZoomHandler.cancel) fftDataZoomHandler.cancel();
+            fftDataZoomHandler = null;
+            if (chartInstance) chartInstance.off('datazoom');
+            fftDataZoomStart = 0;
+            fftDataZoomEnd = 100;
           }
           const max = getMaxSelectable();
           if (selectedVars.length > max) {
@@ -1502,6 +1708,57 @@
         });
       }
 
+      // FFT parameter panel event handlers
+      const fftPanel = plotSection.querySelector('.fft-panel');
+      if (fftPanel) {
+        // Segmented button groups
+        fftPanel.querySelectorAll('.fft-seg-btn[data-fft-param]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const param = btn.dataset.fftParam;
+            const value = btn.dataset.value;
+            if (param === 'freqUnit') fftFreqUnit = value;
+            else if (param === 'yAxis') fftYAxis = value;
+            else if (param === 'xAxis') fftXAxis = value;
+            const group = btn.closest('.fft-segmented');
+            if (group) {
+              group.querySelectorAll('.fft-seg-btn').forEach(b => b.classList.remove('active'));
+            }
+            btn.classList.add('active');
+          });
+        });
+
+        // Base frequency input
+        const fftBaseFreqInput = fftPanel.querySelector('#fftBaseFreqInput');
+        if (fftBaseFreqInput) {
+          fftBaseFreqInput.addEventListener('input', () => {
+            const val = fftBaseFreqInput.value.trim();
+            if (val === '') {
+              fftBaseFreq = null;
+            } else {
+              const n = parseFloat(val);
+              if (!isNaN(n) && n > 0) fftBaseFreq = n;
+            }
+          });
+        }
+
+        // Apply button — triggers FFT recompute with current params
+        const fftApplyBtn = fftPanel.querySelector('#fftApplyBtn');
+        if (fftApplyBtn) {
+          fftApplyBtn.addEventListener('click', () => {
+            // Re-read DOM values to ensure they're synced
+            const selUnit = fftPanel.querySelector('.fft-seg-btn.active[data-fft-param="freqUnit"]');
+            const selY = fftPanel.querySelector('.fft-seg-btn.active[data-fft-param="yAxis"]');
+            const selX = fftPanel.querySelector('.fft-seg-btn.active[data-fft-param="xAxis"]');
+            if (selUnit) fftFreqUnit = selUnit.dataset.value;
+            if (selY) fftYAxis = selY.dataset.value;
+            if (selX) fftXAxis = selX.dataset.value;
+            // Re-render chart with new params
+            saveZoomState();
+            renderChart();
+          });
+        }
+      }
+
       mainArea.innerHTML = '';
       mainArea.appendChild(sidebar);
 
@@ -1561,6 +1818,7 @@
         case 'time-series': return t('mode_ts');
         case 'xy': return t('mode_xy');
         case 'xyz': return t('mode_xyz');
+        case 'fft': return t('mode_fft');
         default: return '';
       }
     }
@@ -1569,6 +1827,7 @@
       if (plotType === 'time-series') return 10;
       if (plotType === 'xy') return 2;
       if (plotType === 'xyz') return 3;
+      if (plotType === 'fft') return 1;
       return Infinity;
     }
 
@@ -1701,6 +1960,7 @@
         case 'time-series': option = buildTimeSeriesOption(); break;
         case 'xy': option = buildXYOption(); break;
         case 'xyz': option = buildXYZOption(); break;
+        case 'fft': option = buildFFTOption(); break;
       }
 
       if (option) {
@@ -1719,6 +1979,7 @@
       if (plotType === 'time-series' && selectedVars.length === 0) return t('msg_select_var');
       if (plotType === 'xy' && selectedVars.length < 2) return t('msg_xy_need');
       if (plotType === 'xyz' && selectedVars.length < 3) return t('msg_xyz_need');
+      if (plotType === 'fft' && selectedVars.length === 0) return t('msg_fft_need');
       return null;
     }
 
@@ -2139,6 +2400,229 @@
           itemStyle: { opacity: 0.8 },
         }],
       };
+    }
+
+    function buildFFTOption() {
+      const { rows, timeColumn } = data;
+      const varName = selectedVars[0];
+      const tc = getThemeColors();
+
+      // Determine data range from zoom state
+      const zoomStart = restoreZoom ? restoreZoom.start : fftDataZoomStart;
+      const zoomEnd = restoreZoom ? restoreZoom.end : fftDataZoomEnd;
+      restoreZoom = null;
+
+      const startIdx = Math.floor(rows.length * zoomStart / 100);
+      const endIdx = Math.min(Math.ceil(rows.length * zoomEnd / 100), rows.length);
+      const clampedStart = Math.max(0, startIdx);
+      const clampedEnd = Math.min(rows.length, Math.max(clampedStart + 2, endIdx));
+
+      // Compute sample rate and FFT
+      let sampleRate = detectSampleRate(rows, timeColumn);
+      const fftResult = computeFFT(rows, varName, clampedStart, clampedEnd);
+
+      // Build frequency axis and magnitude data
+      let freqData = [];
+      let magData = [];
+      if (fftResult) {
+        const baseFreq = sampleRate / fftResult.fftSize;
+        const freqs = new Float64Array(fftResult.numBins);
+        for (let i = 0; i < fftResult.numBins; i++) {
+          freqs[i] = i * baseFreq;
+        }
+        const convertedFreqs = convertFreqUnit(freqs, fftFreqUnit);
+
+        let magnitudes = fftResult.magnitudes;
+        if (fftYAxis === 'per-unit') {
+          let maxMag = 0;
+          for (let i = 0; i < magnitudes.length; i++) {
+            if (magnitudes[i] > maxMag) maxMag = magnitudes[i];
+          }
+          if (maxMag > 0) {
+            const scaled = new Float64Array(magnitudes.length);
+            for (let i = 0; i < magnitudes.length; i++) scaled[i] = magnitudes[i] / maxMag;
+            magnitudes = scaled;
+          }
+        }
+
+        freqData = Array.from(convertedFreqs);
+        magData = Array.from(magnitudes);
+      }
+
+      // Time labels for preview
+      const timeLabels = rows.map(row => {
+        const val = row[timeColumn];
+        if (val instanceof Date) return dayjs(val).format('YYYY-MM-DD HH:mm:ss');
+        return String(val ?? '');
+      });
+
+      // Time-series data for preview
+      const tsData = rows.map(row => {
+        const val = row[varName];
+        if (val === null || val === undefined) return null;
+        return Number(val);
+      });
+
+      const freqUnitLabel = fftFreqUnit;
+
+      const option = {
+        backgroundColor: isDark ? tc.bg : 'transparent',
+        tooltip: {
+          trigger: 'axis',
+          axisPointer: { type: 'cross' },
+        },
+        grid: [
+          {
+            left: '8%', right: '4%', top: '5%', height: '50%',
+            containLabel: true,
+          },
+          {
+            left: '8%', right: '4%', top: '62%', height: '35%',
+            containLabel: true,
+          },
+        ],
+        xAxis: [
+          {
+            type: fftXAxis === 'log' ? 'log' : 'value',
+            name: t('fft_freq_unit') + ' (' + freqUnitLabel + ')',
+            nameLocation: 'center',
+            nameGap: 25,
+            nameTextStyle: { fontSize: 11, color: tc.text },
+            axisLabel: { color: tc.text, fontSize: 10 },
+            splitLine: { lineStyle: { color: tc.splitLine } },
+            gridIndex: 0,
+            min: fftXAxis === 'log' ? Math.max(freqData[1] || 0.001, 0.001) : 0,
+          },
+          {
+            type: 'category',
+            data: timeLabels,
+            axisLabel: { show: false },
+            axisLine: { lineStyle: { color: tc.axisLine } },
+            gridIndex: 1,
+          },
+        ],
+        yAxis: [
+          {
+            type: 'value',
+            name: fftYAxis === 'per-unit' ? t('fft_per_unit') : t('fft_physical'),
+            nameTextStyle: { fontSize: 11, color: tc.text },
+            axisLabel: { color: tc.text, fontSize: 10 },
+            splitLine: { lineStyle: { color: tc.splitLine } },
+            gridIndex: 0,
+          },
+          {
+            type: 'value',
+            name: varName,
+            nameTextStyle: { fontSize: 11, color: tc.text },
+            axisLabel: { color: tc.text, fontSize: 10 },
+            splitLine: { lineStyle: { color: tc.splitLine } },
+            gridIndex: 1,
+          },
+        ],
+        series: [
+          {
+            name: varName + ' FFT',
+            type: 'bar',
+            data: freqData.map((f, i) => [f, magData[i]]),
+            xAxisIndex: 0,
+            yAxisIndex: 0,
+            barWidth: Math.max(1, (freqData.length > 1 ? (freqData[freqData.length - 1] - freqData[0]) / freqData.length * 0.8 : 1)),
+            itemStyle: { color: '#3b82f6' },
+            sampling: freqData.length > SAMPLING_THRESHOLD ? 'lttb' : undefined,
+          },
+          {
+            name: varName,
+            type: 'line',
+            data: tsData,
+            xAxisIndex: 1,
+            yAxisIndex: 1,
+            symbol: 'none',
+            sampling: rows.length > SAMPLING_THRESHOLD ? 'lttb' : undefined,
+            itemStyle: { color: '#3b82f6' },
+          },
+        ],
+        dataZoom: [
+          {
+            type: 'slider',
+            xAxisIndex: 1,
+            start: zoomStart,
+            end: zoomEnd,
+            bottom: '2%',
+            borderColor: tc.splitLine,
+            fillerColor: isDark ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.1)',
+            handleStyle: { color: tc.axisLine },
+            textStyle: { color: tc.text },
+          },
+          {
+            type: 'inside',
+            xAxisIndex: 1,
+            start: zoomStart,
+            end: zoomEnd,
+          },
+        ],
+      };
+
+      // Attach dataZoom event for real-time FFT update
+      // Cancel previous handler if any
+      if (fftDataZoomHandler && fftDataZoomHandler.cancel) fftDataZoomHandler.cancel();
+      fftDataZoomHandler = debounce(() => {
+        if (!chartInstance || plotType !== 'fft') return;
+        const opt = chartInstance.getOption();
+        if (opt && opt.dataZoom && opt.dataZoom.length > 0) {
+          const dz = opt.dataZoom[0];
+          const start = dz.start || 0;
+          const end = dz.end || 100;
+          fftDataZoomStart = start;
+          fftDataZoomEnd = end;
+
+          const sIdx = Math.floor(rows.length * start / 100);
+          const eIdx = Math.min(Math.ceil(rows.length * end / 100), rows.length);
+          const cs = Math.max(0, sIdx);
+          const ce = Math.min(rows.length, Math.max(cs + 2, eIdx));
+
+          const sr = detectSampleRate(rows, timeColumn);
+          const result = computeFFT(rows, varName, cs, ce);
+
+          if (result) {
+            const bFreq = sr / result.fftSize;
+            const freqs = new Float64Array(result.numBins);
+            for (let i = 0; i < result.numBins; i++) freqs[i] = i * bFreq;
+            const convFreqs = convertFreqUnit(freqs, fftFreqUnit);
+
+            let mags = result.magnitudes;
+            if (fftYAxis === 'per-unit') {
+              let maxM = 0;
+              for (let i = 0; i < mags.length; i++) { if (mags[i] > maxM) maxM = mags[i]; }
+              if (maxM > 0) {
+                const scaled = new Float64Array(mags.length);
+                for (let i = 0; i < mags.length; i++) scaled[i] = mags[i] / maxM;
+                mags = scaled;
+              }
+            }
+
+            const newFreqData = Array.from(convFreqs);
+            const newMagData = Array.from(mags);
+            chartInstance.setOption({
+              xAxis: [{
+                type: fftXAxis === 'log' ? 'log' : 'value',
+                min: fftXAxis === 'log' ? Math.max(newFreqData[1] || 0.001, 0.001) : 0,
+              }],
+              series: [{
+                data: newFreqData.map((f, i) => [f, newMagData[i]]),
+                barWidth: Math.max(1, (newFreqData.length > 1 ? (newFreqData[newFreqData.length - 1] - newFreqData[0]) / newFreqData.length * 0.8 : 1)),
+              }],
+            });
+          }
+        }
+      }, 150);
+
+      // Remove previous listener and attach new one
+      if (chartInstance) {
+        chartInstance.off('datazoom', fftDataZoomHandler);
+        chartInstance.on('datazoom', fftDataZoomHandler);
+      }
+
+      return option;
     }
 
     // Global resize (debounced)
