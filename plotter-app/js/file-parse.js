@@ -15,7 +15,7 @@
     const TIME_FORMATS = [
       'YYYY-MM-DDTHH:mm:ssZ', 'YYYY-MM-DDTHH:mm:ss', 'YYYY-MM-DDTHH:mm:ss.SSSZ',
       'YYYY-MM-DDTHH:mm:ss.SSS', 'YYYY-MM-DD', 'DD/MM/YYYY', 'MM/DD/YYYY',
-      'YYYY/MM/DD', 'YYYY-MM-DD HH:mm:ss', 'DD/MM/YYYY HH:mm',
+      'YYYY/MM/DD', 'YYYY-MM-DD HH:mm:ss', 'YYYY-MM-DD HH:mm:ss.SSS', 'DD/MM/YYYY HH:mm',
       'MM/DD/YYYY HH:mm', 'YYYY/MM/DD HH:mm:ss', 'YYYY-MM-DD HH:mm',
       'YYYY/MM/DD HH:mm', 'MM-DD-YYYY HH:mm A', 'MM-DD-YYYY hh:mm A',
       'DD-MM-YYYY HH:mm', 'DD-MM-YYYY HH:mm:ss',
@@ -30,8 +30,17 @@
         if (value >= 1) return excelSerialToDate(value);
         return null;
       }
-      const trimmed = String(value).trim();
+      let trimmed = String(value).trim();
       if (trimmed === '') return null;
+
+      // Strip enclosing single/double quotes (e.g. CSV time fields quoted with ')
+      if (trimmed.length >= 2) {
+        const first = trimmed[0], last = trimmed[trimmed.length - 1];
+        if ((first === "'" && last === "'") || (first === '"' && last === '"')) {
+          trimmed = trimmed.slice(1, -1).trim();
+          if (trimmed === '') return null;
+        }
+      }
 
       // Handle "YYYY-MM-DD HH:mm:ss NNNms" format
       const msMatch = trimmed.match(/^(\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}:\d{2})\s+(\d{1,3})\s*ms$/i);
