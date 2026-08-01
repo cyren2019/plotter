@@ -10,6 +10,96 @@
     let fftDataZoomStart = 0;         // current dataZoom start percentage
     let fftDataZoomEnd = 100;         // current dataZoom end percentage
     let fftDataZoomHandler = null;    // debounced dataZoom event handler reference
+    let fftWindow = 'hann';           // window function (see FFT_WINDOWS registry)
+
+    // ===================== Window Functions =====================
+    // Window registry: name → { enbw (noise-equivalent bandwidth in bins), create(N) }.
+    // enbw is used for PSD scaling. Formulas use symmetric (periodic) convention
+    // cos(2π·i/(N-1)) so the coherent gain equals the window mean.
+    function besselI0(x) {
+      // Modified Bessel function of the first kind, order 0 (series expansion).
+      let sum = 1, term = 1, m = 0;
+      const x2 = (x * x) / 4;
+      while (m < 100) {
+        term *= x2 / ((m + 1) * (m + 1));
+        sum += term;
+        if (Math.abs(term) < 1e-15) break;
+        m++;
+      }
+      return sum;
+    }
+
+    const FFT_WINDOWS = {
+      rect: { enbw: 1.00, create: N => { const w = new Float64Array(N); w.fill(1); return w; } },
+      hann: {
+        enbw: 1.50,
+        create: N => {
+          const w = new Float64Array(N);
+          for (let i = 0; i < N; i++) w[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (N - 1)));
+          return w;
+        },
+      },
+      hamming: {
+        enbw: 1.36,
+        create: N => {
+          const w = new Float64Array(N);
+          for (let i = 0; i < N; i++) w[i] = 0.54 - 0.46 * Math.cos((2 * Math.PI * i) / (N - 1));
+          return w;
+        },
+      },
+      blackman: {
+        enbw: 1.73,
+        create: N => {
+          const w = new Float64Array(N);
+          for (let i = 0; i < N; i++) {
+            w[i] = 0.42 - 0.5 * Math.cos((2 * Math.PI * i) / (N - 1))
+              + 0.08 * Math.cos((4 * Math.PI * i) / (N - 1));
+          }
+          return w;
+        },
+      },
+      blackmanHarris: {
+        enbw: 2.00,
+        create: N => {
+          const w = new Float64Array(N);
+          for (let i = 0; i < N; i++) {
+            w[i] = 0.35875 - 0.48829 * Math.cos((2 * Math.PI * i) / (N - 1))
+              + 0.14128 * Math.cos((4 * Math.PI * i) / (N - 1))
+              - 0.01168 * Math.cos((6 * Math.PI * i) / (N - 1));
+          }
+          return w;
+        },
+      },
+      flattop: {
+        enbw: 3.77,
+        create: N => {
+          const w = new Float64Array(N);
+          for (let i = 0; i < N; i++) {
+            w[i] = 0.21557895 - 0.41663158 * Math.cos((2 * Math.PI * i) / (N - 1))
+              + 0.277263158 * Math.cos((4 * Math.PI * i) / (N - 1))
+              - 0.083578947 * Math.cos((6 * Math.PI * i) / (N - 1))
+              + 0.006947368 * Math.cos((8 * Math.PI * i) / (N - 1));
+          }
+          return w;
+        },
+      },
+      kaiser: {
+        enbw: 2.00, // β=8.6 ≈ Blackman-Harris stopband behavior
+        create: N => {
+          const beta = 8.6, i0b = besselI0(beta);
+          const w = new Float64Array(N);
+          for (let i = 0; i < N; i++) {
+            const x = (2 * i) / (N - 1) - 1; // -1 .. 1
+            w[i] = besselI0(beta * Math.sqrt(Math.max(0, 1 - x * x))) / i0b;
+          }
+          return w;
+        },
+      },
+    };
+
+    function getWindow(name) {
+      return FFT_WINDOWS[name] || FFT_WINDOWS.hann;
+    }
 
     // ===================== FFT Computation =====================
     function nextPowerOf2(n) {
@@ -17,14 +107,6 @@
       let p = 1;
       while (p < n) p <<= 1;
       return p;
-    }
-
-    function hannWindow(N) {
-      const w = new Float64Array(N);
-      for (let i = 0; i < N; i++) {
-        w[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (N - 1)));
-      }
-      return w;
     }
 
     function detectSampleRate(rows, timeColumn) {
@@ -82,7 +164,7 @@
       return result;
     }
 
-    function computeFFT(rows, varName, startIdx, endIdx, sampleRate) {
+    function computeFFT(rows, varName, startIdx, endIdx, sampleRate, windowName) {
       // Extract non-null values from the selected range
       const rawValues = [];
       for (let i = startIdx; i < endIdx && i < rows.length; i++) {
@@ -96,7 +178,8 @@
 
       // Determine FFT size: next power of 2
       const fftSize = nextPowerOf2(rawValues.length);
-      const window = hannWindow(rawValues.length);
+      const win = getWindow(windowName || 'hann');
+      const window = win.create(rawValues.length);
 
       // Compute coherent gain for amplitude compensation
       let windowSum = 0;
@@ -131,6 +214,9 @@
         fftSize: fftSize,
         dataLength: rawValues.length,
         binResolution: binResolution,
+        windowName: windowName || 'hann',
+        enbw: win.enbw,
+        coherentGain: coherentGain,
       };
     }
 

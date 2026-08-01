@@ -329,6 +329,18 @@
                 <span class="fft-unit-label">Hz</span>
               </div>
             </label>
+            <label class="fft-label">
+              <span>${t('fft_window')}</span>
+              <select class="fft-select" id="fftWindowSelect">
+                <option value="rect" ${fftWindow === 'rect' ? 'selected' : ''}>${t('win_rect')}</option>
+                <option value="hann" ${fftWindow === 'hann' ? 'selected' : ''}>${t('win_hann')}</option>
+                <option value="hamming" ${fftWindow === 'hamming' ? 'selected' : ''}>${t('win_hamming')}</option>
+                <option value="blackman" ${fftWindow === 'blackman' ? 'selected' : ''}>${t('win_blackman')}</option>
+                <option value="blackmanHarris" ${fftWindow === 'blackmanHarris' ? 'selected' : ''}>${t('win_blackman_harris')}</option>
+                <option value="flattop" ${fftWindow === 'flattop' ? 'selected' : ''}>${t('win_flattop')}</option>
+                <option value="kaiser" ${fftWindow === 'kaiser' ? 'selected' : ''}>${t('win_kaiser')}</option>
+              </select>
+            </label>
           </div>
           <div class="fft-panel-row">
             <label class="fft-label">
@@ -497,6 +509,14 @@
           });
         }
 
+        // Window function select
+        const fftWindowSelect = fftPanel.querySelector('#fftWindowSelect');
+        if (fftWindowSelect) {
+          fftWindowSelect.addEventListener('change', () => {
+            if (FFT_WINDOWS[fftWindowSelect.value]) fftWindow = fftWindowSelect.value;
+          });
+        }
+
         // Apply button — triggers FFT recompute with current params
         const fftApplyBtn = fftPanel.querySelector('#fftApplyBtn');
         if (fftApplyBtn) {
@@ -521,6 +541,8 @@
               if (val === '') fftSampleRateOverride = null;
               else { const n = parseFloat(val); if (!isNaN(n) && n > 0) fftSampleRateOverride = n; }
             }
+            const winSelect = fftPanel.querySelector('#fftWindowSelect');
+            if (winSelect && FFT_WINDOWS[winSelect.value]) fftWindow = winSelect.value;
             // Re-render chart with new params
             saveZoomState();
             renderChart();
@@ -1189,7 +1211,7 @@
       // Compute sample rate and FFT
       const srInfo = detectSampleRate(rows, timeColumn);
       let sampleRate = fftSampleRateOverride !== null ? fftSampleRateOverride : srInfo.sampleRate;
-      const fftResult = computeFFT(rows, varName, clampedStart, clampedEnd, sampleRate);
+      const fftResult = computeFFT(rows, varName, clampedStart, clampedEnd, sampleRate, fftWindow);
 
       // Build frequency axis and magnitude data
       let freqData = [];
@@ -1404,7 +1426,7 @@
 
           const srInfo = detectSampleRate(rows, timeColumn);
           const sr = fftSampleRateOverride !== null ? fftSampleRateOverride : srInfo.sampleRate;
-          const result = computeFFT(rows, varName, cs, ce, sr);
+          const result = computeFFT(rows, varName, cs, ce, sr, fftWindow);
 
           if (result) {
             // Fundamental freq: auto-detect or manual
