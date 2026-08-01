@@ -1321,12 +1321,14 @@
           axisPointer: { type: 'cross' },
         },
         grid: [
+          // Spectrum fills the space above the fixed-height time preview
           {
-            left: '3%', right: '4%', top: '4%', height: '46%',
+            left: '3%', right: '4%', top: 30, bottom: 280,
             containLabel: true,
           },
+          // Time preview: fixed 200px height (matches time-series single panel)
           {
-            left: '3%', right: '4%', top: '56%', height: '36%',
+            left: '3%', right: '4%', bottom: 40, height: 200,
             containLabel: true,
           },
         ],
@@ -1380,6 +1382,7 @@
             xAxisIndex: 0,
             yAxisIndex: 0,
             barWidth: Math.max(1, (freqData.length > 1 ? (freqData[freqData.length - 1] - freqData[0]) / freqData.length * 0.8 : 1)),
+            itemStyle: { color: '#5470c6' }, // match time-series mode palette[0]
             sampling: freqData.length > SAMPLING_THRESHOLD ? 'lttb' : undefined,
             markLine: markLines.length > 0 ? {
               silent: true,
@@ -1395,6 +1398,7 @@
             yAxisIndex: 1,
             symbol: 'none',
             lineStyle: { width: 1.5 },
+            itemStyle: { color: '#5470c6' }, // match time-series mode palette[0]
             sampling: rows.length > SAMPLING_THRESHOLD ? 'lttb' : undefined,
           },
         ],
@@ -1403,7 +1407,7 @@
           {
             type: 'slider',
             xAxisIndex: 0,
-            bottom: '46%',
+            bottom: 247,
             borderColor: tc.splitLine,
             fillerColor: isDark ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.1)',
             handleStyle: { color: tc.axisLine },
@@ -1419,7 +1423,7 @@
             xAxisIndex: 1,
             start: zoomStart,
             end: zoomEnd,
-            bottom: '1%',
+            bottom: 5,
             borderColor: tc.splitLine,
             fillerColor: isDark ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.1)',
             handleStyle: { color: tc.axisLine },
