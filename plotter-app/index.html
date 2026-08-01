@@ -446,6 +446,22 @@
       outline: none; cursor: pointer;
     }
     .fft-select:focus { border-color: var(--accent-border); }
+    .fft-measurements {
+      display: flex; align-items: center; gap: 8px;
+      padding: 4px 16px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0; flex-wrap: wrap;
+    }
+    .fft-mstat {
+      display: inline-flex; align-items: baseline; gap: 6px;
+      padding: 2px 10px;
+      border-radius: 5px;
+      background: var(--accent-bg);
+      font-size: 11px; color: var(--text);
+      white-space: nowrap;
+    }
+    .fft-mstat b { font-weight: 500; opacity: 0.6; }
+    .fft-mstat i { font-style: normal; font-weight: 600; color: var(--text-h); }
 
     /* Drag overlay */
     .drag-overlay {

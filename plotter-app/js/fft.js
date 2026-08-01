@@ -314,7 +314,11 @@
     }
 
     function autoDetectBaseFreq(magnitudes, freqs, sampleRate, fftSize) {
-      // Find fundamental frequency using harmonic scoring.
+      // Fundamental detection via harmonic support scoring.
+      // Score = sum of significant harmonic peak magnitudes aligned with h·f0.
+      // Only harmonics that are themselves significant local maxima count, so
+      // missing harmonics (e.g. even harmonics of a square wave) are NOT penalized,
+      // and the true fundamental wins because its own peak is the strongest.
       if (!magnitudes || magnitudes.length < 3) return { freq: sampleRate / fftSize, confidence: 'unknown' };
 
       const binResolution = sampleRate / fftSize;
@@ -339,31 +343,37 @@
         return { freq: best.freq, confidence: 'low' };
       }
 
-      // Harmonic scoring for each candidate
-      let meanSpectrum = 0;
-      for (let i = 0; i < magnitudes.length; i++) meanSpectrum += magnitudes[i];
-      meanSpectrum /= magnitudes.length;
+      // Single significant peak → it is the fundamental (no harmonics to disambiguate)
+      if (sigPeaks.length === 1) {
+        return { freq: sigPeaks[0].freq, confidence: 'low', harmonicCount: 1 };
+      }
 
+      const sigIndex = new Set(sigPeaks.map(p => p.index));
       const nyquist = sampleRate / 2;
       let bestCandidate = null, bestScore = -Infinity;
 
       for (const peak of sigPeaks) {
         const f0 = peak.freq;
         if (f0 < binResolution * 0.5) continue;
-        let harmonicScore = peak.mag;
+        let score = peak.mag; // h = 1 (the candidate itself)
         let harmonicCount = 1;
-        for (let h = 2; h <= 8; h++) {
+        for (let h = 2; h <= 20; h++) {
           const harmonicFreq = h * f0;
           if (harmonicFreq > nyquist * 0.95) break;
-          const binIdx = Math.round(harmonicFreq / binResolution);
-          if (binIdx < magnitudes.length) {
-            harmonicScore += magnitudes[binIdx];
-            harmonicCount++;
+          const center = Math.round(harmonicFreq / binResolution);
+          if (center >= magnitudes.length) break;
+          // Search ±5 bins for a significant harmonic peak (f0 may be off-bin)
+          const lo = Math.max(1, center - 5), hi = Math.min(magnitudes.length - 1, center + 5);
+          for (let b = lo; b <= hi; b++) {
+            if (sigIndex.has(b)) {
+              score += magnitudes[b];
+              harmonicCount++;
+              break;
+            }
           }
         }
-        const avgHarmonicMag = harmonicScore / harmonicCount;
-        const score = avgHarmonicMag / Math.max(meanSpectrum, 1e-10);
-        if (score > bestScore) {
+        // Max harmonic support wins; tie-break toward lower frequency
+        if (score > bestScore || (score === bestScore && f0 < bestCandidate.freq)) {
           bestScore = score;
           bestCandidate = { freq: f0, confidence: harmonicCount >= 2 ? 'high' : 'low', harmonicCount };
         }
@@ -372,4 +382,100 @@
       if (bestCandidate) return bestCandidate;
       const best = sigPeaks.reduce((a, b) => a.mag > b.mag ? a : b);
       return { freq: best.freq, confidence: 'low' };
+    }
+
+    // ===================== Auto Measurements =====================
+    // Computes harmonic-quality metrics from a Vpk magnitude spectrum.
+    // All ratios are unit-invariant, so this runs on the raw spectrum
+    // (before amplitude-unit / display transforms).
+    function computeMeasurements(magnitudes, freqs, sampleRate, fftSize, baseFreq) {
+      const numBins = magnitudes.length;
+      if (numBins < 4 || !baseFreq || baseFreq <= 0) return null;
+      const binRes = sampleRate / fftSize;
+
+      // Find the strongest bin within ±5 of a target bin (handles off-bin f0 / leakage).
+      // f0 may be quantized to a bin, so harmonic drift grows with h (~0.5 bin · h).
+      const peakNear = (center) => {
+        let best = center, bestMag = -Infinity;
+        const lo = Math.max(1, center - 5), hi = Math.min(numBins - 1, center + 5);
+        for (let b = lo; b <= hi; b++) {
+          if (magnitudes[b] > bestMag) { bestMag = magnitudes[b]; best = b; }
+        }
+        return best;
+      };
+
+      const f0Bin = peakNear(Math.round(baseFreq / binRes));
+      if (f0Bin <= 0 || f0Bin >= numBins) return null;
+
+      const m1 = magnitudes[f0Bin];
+      if (!Number.isFinite(m1) || m1 <= 0) return null;
+
+      const nyquist = sampleRate / 2;
+      const harmonics = [];
+      let thdSq = 0;
+      for (let h = 2; h <= 50; h++) {
+        const hf = h * baseFreq;
+        if (hf > nyquist) break;
+        const bin = peakNear(Math.round(hf / binRes));
+        if (bin <= 0 || bin >= numBins) break;
+        const mh = magnitudes[bin];
+        if (Number.isFinite(mh) && mh > 0) {
+          harmonics.push({ h, freq: hf, bin, mag: mh });
+          thdSq += mh * mh;
+        }
+      }
+
+      const thdRatio = Math.sqrt(thdSq) / m1;
+      const thdPct = thdRatio * 100;
+      const thdDb = 20 * Math.log10(thdRatio);
+
+      // THD+N / SINAD: total power excluding DC and the fundamental's main-lobe
+      // notch (±5 bins), so window leakage of the carrier is not counted as distortion.
+      let totalPower = 0;
+      for (let i = 1; i < numBins; i++) {
+        if (i >= f0Bin - 5 && i <= f0Bin + 5) continue;
+        const m = magnitudes[i];
+        if (Number.isFinite(m)) totalPower += m * m;
+      }
+      const thdnRatio = totalPower > 0 ? Math.sqrt(totalPower) / m1 : 0;
+      const thdnPct = thdnRatio * 100;
+      const thdnDb = thdnRatio > 0 ? 20 * Math.log10(thdnRatio) : -Infinity;
+      const sinadDb = thdnRatio > 0 ? -20 * Math.log10(thdnRatio) : Infinity;
+
+      // Noise floor / SNR / SFDR: exclude signal bins (±6 bins around components)
+      const excluded = new Uint8Array(numBins);
+      excluded[0] = 1; // DC
+      const markExcluded = (bin) => {
+        const lo = Math.max(1, bin - 6), hi = Math.min(numBins - 1, bin + 6);
+        for (let i = lo; i <= hi; i++) excluded[i] = 1;
+      };
+      markExcluded(f0Bin);
+      for (const h of harmonics) markExcluded(h.bin);
+
+      let noisePower = 0, noiseCount = 0;
+      let maxSpur = 0, maxSpurFreq = 0;
+      for (let i = 1; i < numBins; i++) {
+        if (excluded[i]) continue;
+        const m = magnitudes[i];
+        if (!Number.isFinite(m)) continue;
+        noisePower += m * m;
+        noiseCount++;
+        if (m > maxSpur) { maxSpur = m; maxSpurFreq = freqs[i]; }
+      }
+      const noiseRms = noiseCount > 0 ? Math.sqrt(noisePower / noiseCount) : 0;
+      const snrDb = noiseRms > 0 ? 20 * Math.log10(m1 / noiseRms) : Infinity;
+      const sfdrDb = maxSpur > 0 ? 20 * Math.log10(m1 / maxSpur) : Infinity;
+      const noiseFloorDb = noiseRms > 0 ? 20 * Math.log10(noiseRms / m1) : -Infinity;
+
+      return {
+        fundamental: { freq: baseFreq, mag: m1, bin: f0Bin },
+        harmonics: harmonics,
+        thd: { pct: thdPct, db: thdDb },
+        thdn: { pct: thdnPct, db: thdnDb },
+        sinad: sinadDb,
+        snr: snrDb,
+        sfdr: sfdrDb,
+        noiseFloor: noiseFloorDb,
+        maxSpur: { freq: maxSpurFreq, mag: maxSpur },
+      };
     }

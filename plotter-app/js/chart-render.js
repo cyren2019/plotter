@@ -387,6 +387,15 @@
             <button class="btn btn-primary" id="fftApplyBtn">${t('fft_apply')}</button>
           </div>
         </div>
+        <div class="fft-measurements" id="fftMeasurements" style="display: none;">
+          <span class="fft-mstat"><b>${t('meas_f0')}</b><i id="mF0">-</i></span>
+          <span class="fft-mstat"><b>THD</b><i id="mTHD">-</i></span>
+          <span class="fft-mstat"><b>THD+N</b><i id="mTHDN">-</i></span>
+          <span class="fft-mstat"><b>SNR</b><i id="mSNR">-</i></span>
+          <span class="fft-mstat"><b>SFDR</b><i id="mSFDR">-</i></span>
+          <span class="fft-mstat"><b>SINAD</b><i id="mSINAD">-</i></span>
+          <span class="fft-mstat"><b>${t('meas_noise')}</b><i id="mNoise">-</i></span>
+        </div>
         <div class="plot-label"><span>${getModeLabel()}</span></div>
         <div class="plot-container">
           <div id="chart"></div>
@@ -1220,6 +1229,32 @@
       return t('fft_physical');
     }
 
+    let fftMeasurements = null; // latest auto-measurement results (drives the measurement strip)
+
+    function renderFftMeasurements() {
+      const box = document.getElementById('fftMeasurements');
+      if (!box) return;
+      const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+      if (!fftMeasurements) {
+        box.style.display = 'none';
+        return;
+      }
+      box.style.display = 'flex';
+      const m = fftMeasurements;
+      const f0 = m.fundamental.freq;
+      const f0Label = fftFreqUnit === 'rad/s' ? (f0 * 2 * Math.PI).toFixed(2) + ' rad/s'
+        : fftFreqUnit === 'deg/s' ? (f0 * 360).toFixed(2) + ' deg/s'
+        : f0.toFixed(2) + ' Hz';
+      const fmtDb = (v) => (v === Infinity || v === -Infinity) ? '∞' : (Number.isFinite(v) ? v.toFixed(1) + ' dB' : '-');
+      set('mF0', f0Label);
+      set('mTHD', m.thd.pct.toFixed(2) + '%');
+      set('mTHDN', m.thdn.pct.toFixed(2) + '%');
+      set('mSNR', fmtDb(m.snr));
+      set('mSFDR', fmtDb(m.sfdr));
+      set('mSINAD', fmtDb(m.sinad));
+      set('mNoise', Number.isFinite(m.noiseFloor) ? m.noiseFloor.toFixed(1) + ' dBc' : '∞');
+    }
+
     function buildFFTOption() {
       const { rows, timeColumn } = data;
       const varName = selectedVars[0];
@@ -1247,6 +1282,7 @@
       let markLines = [];
       let autoDetectedF0 = null;
       let f0confidence = 'unknown';
+      fftMeasurements = null;
 
       if (fftResult) {
         // Fundamental frequency: auto-detect or manual
@@ -1262,6 +1298,9 @@
           f0confidence = detected.confidence || 'unknown';
           autoDetectedF0 = baseFreq;
         }
+
+        // Auto-measurements (THD / THD+N / SNR / SFDR / SINAD / noise floor)
+        fftMeasurements = computeMeasurements(fftResult.magnitudes, fftResult.freqs, sampleRate, fftResult.fftSize, baseFreq);
 
         // Use the corrected frequency axis from FFT result
         const convertedFreqs = convertFreqUnit(fftResult.freqs, fftFreqUnit);
@@ -1493,6 +1532,9 @@
               bFreq = detected.freq;
             }
 
+            // Auto-measurements (live update on zoom)
+            fftMeasurements = computeMeasurements(result.magnitudes, result.freqs, sr, result.fftSize, bFreq);
+
             // Use the corrected frequency axis from FFT result
             const convFreqs = convertFreqUnit(result.freqs, fftFreqUnit);
 
@@ -1564,6 +1606,7 @@
                 markLine: liveMarkLines.length > 0 ? { silent: true, symbol: 'none', data: liveMarkLines } : undefined,
               }],
             });
+            renderFftMeasurements();
           }
         }
       }, 150);
@@ -1587,5 +1630,6 @@
         hint.textContent = parts.join(' ');
       }
 
+      renderFftMeasurements();
       return option;
     }
