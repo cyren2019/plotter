@@ -1210,6 +1210,17 @@
       const varName = selectedVars[0];
       const tc = getThemeColors();
 
+      // Preserve the spectrum frequency-axis zoom across re-renders
+      let specZoomStart = 0, specZoomEnd = 100;
+      if (chartInstance) {
+        try {
+          const prev = chartInstance.getOption();
+          const isSpec = (d) => (d.xAxisIndex === 0) || (Array.isArray(d.xAxisIndex) && d.xAxisIndex.includes(0));
+          const sdz = prev && prev.dataZoom ? prev.dataZoom.find(isSpec) : null;
+          if (sdz) { specZoomStart = sdz.start || 0; specZoomEnd = sdz.end || 100; }
+        } catch (e) { /* ignore */ }
+      }
+
       // Determine data range from zoom state
       const zoomStart = restoreZoom ? restoreZoom.start : fftDataZoomStart;
       const zoomEnd = restoreZoom ? restoreZoom.end : fftDataZoomEnd;
@@ -1431,6 +1442,8 @@
           {
             type: 'slider',
             xAxisIndex: 0,
+            start: specZoomStart,
+            end: specZoomEnd,
             bottom: 247,
             borderColor: tc.splitLine,
             fillerColor: isDark ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.1)',
@@ -1440,6 +1453,8 @@
           {
             type: 'inside',
             xAxisIndex: 0,
+            start: specZoomStart,
+            end: specZoomEnd,
           },
           // Time-window selection (drives FFT recompute)
           {
@@ -1462,9 +1477,15 @@
         ],
       };
 
-      // Attach dataZoom event for real-time FFT update
-      // Cancel previous handler if any
-      if (fftDataZoomHandler && fftDataZoomHandler.cancel) fftDataZoomHandler.cancel();
+      // Attach dataZoom event for real-time FFT update.
+      // Recompute the FFT for the newly selected time window via a full re-render
+      // (buildFFTOption). A full render guarantees the spectrum is drawn exactly as
+      // on the initial render — incremental setOption merges can leave stale
+      // markLines / partial canvas state, producing an incorrect spectrum.
+      if (fftDataZoomHandler) {
+        chartInstance.off('datazoom', fftDataZoomHandler);
+        if (fftDataZoomHandler.cancel) fftDataZoomHandler.cancel();
+      }
       fftDataZoomHandler = debounce(() => {
         if (!chartInstance || plotType !== 'fft') return;
         const opt = chartInstance.getOption();
@@ -1473,98 +1494,14 @@
         const start = timeDZ.start || 0;
         const end = timeDZ.end || 100;
         // Only recompute when the time window actually changed. Spectrum-axis zooms
-        // (xAxisIndex 0) leave the time window untouched and are purely visual, so
-        // they fall through here without triggering a recompute.
+        // (xAxisIndex 0) leave the time window untouched and are purely visual.
         if (Math.abs(start - fftDataZoomStart) < 0.01 && Math.abs(end - fftDataZoomEnd) < 0.01) return;
         fftDataZoomStart = start;
         fftDataZoomEnd = end;
-
-        const sIdx = Math.floor(rows.length * start / 100);
-        const eIdx = Math.min(Math.ceil(rows.length * end / 100), rows.length);
-        const cs = Math.max(0, sIdx);
-        const ce = Math.min(rows.length, Math.max(cs + 2, eIdx));
-
-        const srInfo = detectSampleRate(rows, timeColumn);
-        const sr = srInfo.sampleRate;
-        const result = computeAveragedFFT(rows, varName, cs, ce, sr, fftWindow, fftAveraging);
-
-          if (result) {
-            // Fundamental freq: auto-detected (no manual override)
-            const detected = autoDetectBaseFreq(result.magnitudes, result.freqs, sr, result.fftSize);
-            const bFreq = detected.freq;
-
-            // Auto-measurements (live update on zoom)
-            fftMeasurements = computeMeasurements(result.magnitudes, result.freqs, sr, result.fftSize, bFreq);
-
-            // Use the corrected frequency axis from FFT result
-            const convFreqs = convertFreqUnit(result.freqs, fftFreqUnit);
-
-            let mags = result.magnitudes;
-
-            // Amplitude unit calibration (mirrors buildFFTOption)
-            if (fftAmpUnit === 'rms') {
-              const scaled = new Float64Array(mags.length);
-              for (let i = 0; i < mags.length; i++) scaled[i] = i === 0 ? mags[i] : mags[i] / Math.SQRT2;
-              mags = scaled;
-            }
-
-            // Y-axis display transform
-            if (fftYAxis === 'per-unit') {
-              let maxM = 0;
-              for (let i = 1; i < mags.length; i++) { if (mags[i] > maxM) maxM = mags[i]; }
-              if (maxM > 0) {
-                const scaled = new Float64Array(mags.length);
-                for (let i = 0; i < mags.length; i++) scaled[i] = mags[i] / maxM;
-                mags = scaled;
-              }
-            } else if (fftYAxis === 'db') {
-              let refMag = 1.0;
-              for (let i = 1; i < mags.length; i++) { if (mags[i] > refMag) refMag = mags[i]; }
-              const dbFloor = -120;
-              const converted = new Float64Array(mags.length);
-              for (let i = 0; i < mags.length; i++) {
-                const val = mags[i] / refMag;
-                converted[i] = val > 1e-10 ? 20 * Math.log10(val) : dbFloor;
-              }
-              mags = converted;
-            }
-
-            // Harmonic markLines (max 20)
-            const liveMarkLines = [];
-            const nyq = sr / 2;
-            for (let h = 1; h <= 20; h++) {
-              const hf = h * bFreq;
-              if (hf > nyq * 0.99) break;
-              const df = fftFreqUnit === 'rad/s' ? hf * 2 * Math.PI : hf;
-              liveMarkLines.push({
-                xAxis: df,
-                lineStyle: { type: 'dashed', color: h === 1 ? 'rgba(239,68,68,0.5)' : 'rgba(156,163,175,0.25)', width: h === 1 ? 1.5 : 0.5 },
-                label: { show: h === 1, formatter: h + '×', position: 'start', color: 'rgba(239,68,68,0.7)', fontSize: 10 },
-              });
-            }
-
-            const newFreqData = Array.from(convFreqs);
-            const newMagData = Array.from(mags);
-            chartInstance.setOption({
-              xAxis: [{
-                type: fftXAxis === 'log' ? 'log' : 'value',
-                min: fftXAxis === 'log' ? Math.max(newFreqData[1] || 0.001, 0.001) : 0,
-              }],
-              series: [{
-                data: newFreqData.map((f, i) => [f, newMagData[i]]),
-                barWidth: getFftBarWidth(result.binResolution, fftFreqUnit),
-                markLine: liveMarkLines.length > 0 ? { silent: true, symbol: 'none', data: liveMarkLines } : undefined,
-              }],
-            });
-            renderFftMeasurements();
-          }
+        restoreZoom = null; // buildFFTOption must use the tracked time window
+        renderChart();
       }, 150);
-
-      // Remove previous listener and attach new one
-      if (chartInstance) {
-        chartInstance.off('datazoom', fftDataZoomHandler);
-        chartInstance.on('datazoom', fftDataZoomHandler);
-      }
+      chartInstance.on('datazoom', fftDataZoomHandler);
 
       // Update the hint to show sample rate and auto-detected f0
       const hint = document.querySelector('#fftNyquistHint');
