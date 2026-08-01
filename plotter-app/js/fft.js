@@ -12,6 +12,7 @@
     let fftDataZoomHandler = null;    // debounced dataZoom event handler reference
     let fftWindow = 'hann';           // window function (see FFT_WINDOWS registry)
     let fftAveraging = 'none';        // 'none' | 'linear' | 'exp' | 'peak'
+    let fftAmpUnit = 'pk';            // 'pk' | 'rms' | 'psd' — amplitude calibration
 
     // ===================== Window Functions =====================
     // Window registry: name → { enbw (noise-equivalent bandwidth in bins), create(N) }.

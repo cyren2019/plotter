@@ -357,6 +357,15 @@
                 <button class="fft-seg-btn ${fftYAxis === 'physical' ? 'active' : ''}" data-fft-param="yAxis" data-value="physical">${t('fft_physical')}</button>
                 <button class="fft-seg-btn ${fftYAxis === 'per-unit' ? 'active' : ''}" data-fft-param="yAxis" data-value="per-unit">${t('fft_per_unit')}</button>
                 <button class="fft-seg-btn ${fftYAxis === 'db' ? 'active' : ''}" data-fft-param="yAxis" data-value="db">${t('fft_db')}</button>
+                <button class="fft-seg-btn ${fftYAxis === 'dbc' ? 'active' : ''}" data-fft-param="yAxis" data-value="dbc">${t('fft_dbc')}</button>
+              </div>
+            </label>
+            <label class="fft-label">
+              <span>${t('fft_amp')}</span>
+              <div class="fft-segmented">
+                <button class="fft-seg-btn ${fftAmpUnit === 'pk' ? 'active' : ''}" data-fft-param="ampUnit" data-value="pk">${t('amp_pk')}</button>
+                <button class="fft-seg-btn ${fftAmpUnit === 'rms' ? 'active' : ''}" data-fft-param="ampUnit" data-value="rms">${t('amp_rms')}</button>
+                <button class="fft-seg-btn ${fftAmpUnit === 'psd' ? 'active' : ''}" data-fft-param="ampUnit" data-value="psd">${t('amp_psd')}</button>
               </div>
             </label>
             <label class="fft-label">
@@ -480,6 +489,7 @@
           else if (param === 'yAxis') fftYAxis = value;
           else if (param === 'xAxis') fftXAxis = value;
           else if (param === 'averaging') fftAveraging = value;
+          else if (param === 'ampUnit') fftAmpUnit = value;
         };
         fftPanel.querySelectorAll('.fft-seg-btn[data-fft-param]').forEach(btn => {
           btn.addEventListener('click', () => {
@@ -1201,6 +1211,15 @@
       };
     }
 
+    function getFftYAxisName() {
+      if (fftYAxis === 'per-unit') return t('fft_per_unit');
+      if (fftYAxis === 'db') return t('fft_db');
+      if (fftYAxis === 'dbc') return t('fft_dbc');
+      if (fftAmpUnit === 'rms') return t('amp_rms_label');
+      if (fftAmpUnit === 'psd') return t('amp_psd_label');
+      return t('fft_physical');
+    }
+
     function buildFFTOption() {
       const { rows, timeColumn } = data;
       const varName = selectedVars[0];
@@ -1248,6 +1267,27 @@
         const convertedFreqs = convertFreqUnit(fftResult.freqs, fftFreqUnit);
 
         let magnitudes = fftResult.magnitudes;
+
+        // --- Amplitude unit calibration (applied before display transform) ---
+        if (fftAmpUnit === 'rms') {
+          // RMS: peak/√2 (DC stays as-is)
+          const scaled = new Float64Array(magnitudes.length);
+          for (let i = 0; i < magnitudes.length; i++) {
+            scaled[i] = i === 0 ? magnitudes[i] : magnitudes[i] / Math.SQRT2;
+          }
+          magnitudes = scaled;
+        } else if (fftAmpUnit === 'psd') {
+          // Power spectral density: |X|² / (fs · ENBW) → V²/Hz
+          const denom = sampleRate * (fftResult.enbw || 1.5);
+          const scaled = new Float64Array(magnitudes.length);
+          for (let i = 0; i < magnitudes.length; i++) {
+            scaled[i] = (magnitudes[i] * magnitudes[i]) / denom;
+          }
+          magnitudes = scaled;
+        }
+        // 'pk': leave as coherent-gain-compensated peak magnitudes
+
+        // --- Y-axis display transform ---
         if (fftYAxis === 'per-unit') {
           // Per-unit: normalize to max magnitude, excluding DC (index 0)
           let maxMag = 0;
@@ -1259,11 +1299,18 @@
             for (let i = 0; i < magnitudes.length; i++) scaled[i] = magnitudes[i] / maxMag;
             magnitudes = scaled;
           }
-        } else if (fftYAxis === 'db') {
-          // dB: 20*log10(magnitude), referenced to max (excluding DC)
+        } else if (fftYAxis === 'db' || fftYAxis === 'dbc') {
+          // dB: 20*log10(magnitude), referenced to max; dBc: referenced to fundamental
           let refMag = 1.0;
-          for (let i = 1; i < magnitudes.length; i++) {
-            if (magnitudes[i] > refMag) refMag = magnitudes[i];
+          if (fftYAxis === 'dbc') {
+            const binIdx = Math.round(baseFreq / fftResult.binResolution);
+            if (binIdx > 0 && binIdx < magnitudes.length && magnitudes[binIdx] > 0) {
+              refMag = magnitudes[binIdx];
+            } else {
+              for (let i = 1; i < magnitudes.length; i++) if (magnitudes[i] > refMag) refMag = magnitudes[i];
+            }
+          } else {
+            for (let i = 1; i < magnitudes.length; i++) if (magnitudes[i] > refMag) refMag = magnitudes[i];
           }
           const dbFloor = -120;
           const converted = new Float64Array(magnitudes.length);
@@ -1351,7 +1398,7 @@
         yAxis: [
           {
             type: 'value',
-            name: fftYAxis === 'db' ? t('fft_db') : fftYAxis === 'per-unit' ? t('fft_per_unit') : t('fft_physical'),
+            name: getFftYAxisName(),
             nameTextStyle: { fontSize: 11, color: tc.text },
             axisLabel: { color: tc.text, fontSize: 10 },
             splitLine: { lineStyle: { color: tc.splitLine } },
@@ -1450,6 +1497,20 @@
             const convFreqs = convertFreqUnit(result.freqs, fftFreqUnit);
 
             let mags = result.magnitudes;
+
+            // Amplitude unit calibration (mirrors buildFFTOption)
+            if (fftAmpUnit === 'rms') {
+              const scaled = new Float64Array(mags.length);
+              for (let i = 0; i < mags.length; i++) scaled[i] = i === 0 ? mags[i] : mags[i] / Math.SQRT2;
+              mags = scaled;
+            } else if (fftAmpUnit === 'psd') {
+              const denom = sr * (result.enbw || 1.5);
+              const scaled = new Float64Array(mags.length);
+              for (let i = 0; i < mags.length; i++) scaled[i] = (mags[i] * mags[i]) / denom;
+              mags = scaled;
+            }
+
+            // Y-axis display transform
             if (fftYAxis === 'per-unit') {
               let maxM = 0;
               for (let i = 1; i < mags.length; i++) { if (mags[i] > maxM) maxM = mags[i]; }
@@ -1458,9 +1519,15 @@
                 for (let i = 0; i < mags.length; i++) scaled[i] = mags[i] / maxM;
                 mags = scaled;
               }
-            } else if (fftYAxis === 'db') {
+            } else if (fftYAxis === 'db' || fftYAxis === 'dbc') {
               let refMag = 1.0;
-              for (let i = 1; i < mags.length; i++) { if (mags[i] > refMag) refMag = mags[i]; }
+              if (fftYAxis === 'dbc') {
+                const binIdx = Math.round(bFreq / result.binResolution);
+                if (binIdx > 0 && binIdx < mags.length && mags[binIdx] > 0) refMag = mags[binIdx];
+                else for (let i = 1; i < mags.length; i++) { if (mags[i] > refMag) refMag = mags[i]; }
+              } else {
+                for (let i = 1; i < mags.length; i++) { if (mags[i] > refMag) refMag = mags[i]; }
+              }
               const dbFloor = -120;
               const converted = new Float64Array(mags.length);
               for (let i = 0; i < mags.length; i++) {
