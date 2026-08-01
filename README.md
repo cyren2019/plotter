@@ -5,7 +5,7 @@
 A browser-based lightweight data visualization tool supporting CSV and Excel file imports. Automatically generates **time-series charts**, **XY scatter plots**, **XYZ 3D scatter plots**, and **FFT spectrum analysis**. Zero build steps, zero runtime dependencies — open and go.
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-v1.2.0-blue)
+![Version](https://img.shields.io/badge/version-v1.2.1-blue)
 
 ---
 
@@ -32,12 +32,15 @@ A browser-based lightweight data visualization tool supporting CSV and Excel fil
 | **XYZ 3D** | Three-variable 3D scatter (requires echarts-gl) | 3 |
 | **FFT Spectrum** | FFT frequency-domain analysis with harmonic markers | 1 |
 
-### FFT Spectrum Analysis (v1.2.0)
+### FFT Spectrum Analysis (v1.2.1)
 - Real-time FFT of selected time range via dataZoom slider
-- Hann window with coherent gain compensation for accurate amplitude
-- Fundamental frequency auto-detection using harmonic scoring
+- **7 window functions**: Rect / Hann / Hamming / Blackman / Blackman-Harris / Flat-top / Kaiser, with automatic coherent-gain compensation
+- **Spectrum averaging**: Single / Linear / Exponential / Peak-Hold (Max-Hold), 50% overlapping segments
+- **Amplitude calibration**: Peak (Vpk) / RMS (Vrms) / Power Spectral Density (PSD, V²/Hz)
+- **Auto-measurement panel**: THD, THD+N, SNR, SFDR, SINAD and noise floor displayed live
+- Fundamental frequency auto-detection using harmonic support scoring (handles missing harmonics, e.g. square waves)
 - Harmonic marker lines at f₀, 2f₀, 3f₀, …
-- Multiple Y-axis modes: Physical (absolute), Per-Unit (normalized), dB (logarithmic)
+- Multiple Y-axis modes: Physical (absolute), Per-Unit (normalized), dB (logarithmic), dBc (relative to fundamental)
 - Configurable frequency units: Hz, rad/s, deg/s
 - Manual sample rate override for non-timestamp data
 - Automatic or manual fundamental frequency setting
@@ -122,8 +125,14 @@ python3 -m http.server 8080 -d plotter-app
 ```
 plotter/
 ├── plotter-app/
-│   ├── index.html              # Full application (HTML + CSS + JS, ~2890 lines)
-│   ├── test_fft.csv            # Sample FFT test data (50 Hz sine, harmonics, square wave)
+│   ├── index.html              # App shell (HTML + CSS), loads module scripts in order
+│   ├── test-data.csv           # Sample test data (1 kHz, 50 Hz sine / square / harmonics / binary)
+│   ├── js/                     # Application modules (no build — plain scripts, ordered)
+│   │   ├── app.js              # State, event binding, initialization
+│   │   ├── i18n.js             # zh/en dictionaries and language switching
+│   │   ├── file-parse.js       # CSV/Excel parsing, time detection, binary-column detection
+│   │   ├── fft.js              # FFT math: windows, averaging, measurements, fundamental detection
+│   │   └── chart-render.js     # renderApp/renderChart and per-mode ECharts option builders
 │   ├── lib/                    # Third-party libraries (offline CDN copies)
 │   │   ├── dayjs.min.js                # Date parsing (v1.x)
 │   │   ├── customParseFormat.js        # dayjs strict format plugin
@@ -136,8 +145,7 @@ plotter/
 │       └── icons.svg
 ├── .gitignore
 ├── README.md
-├── README_zh-CN.md
-└── CLAUDE.md
+└── README_zh-CN.md
 ```
 
 ---
@@ -152,7 +160,7 @@ plotter/
 | **Time Parsing** | Two-stage: dayjs native parsing → 20+ format strict matching → loose fallback |
 | **CSV Parsing** | Custom parser with quote escaping, delimiter auto-detection, encoding fallback |
 | **Excel Parsing** | SheetJS (`xlsx.full.min.js`), reads the first sheet |
-| **FFT Analysis** | Hann window → zero-pad to power-of-2 → RFFT via `fourier-transform.js` → coherent gain compensation → harmonic scoring fundamental detection |
+| **FFT Analysis** | 7 window functions → segment averaging (linear/exp/peak) → zero-pad to power-of-2 → RFFT via `fourier-transform.js` → coherent gain compensation → amplitude calibration (Vpk/Vrms/PSD) → harmonic-support fundamental detection → THD/SNR auto-measurements |
 | **Chart Engine** | Apache ECharts 5.x + echarts-gl (3D support) |
 
 ### Data Flow
@@ -165,8 +173,8 @@ File Import → Encoding Detection → CSV/Excel Parsing → Time Column Auto-De
 ### FFT Data Flow
 
 ```
-Variable Selection → Zoom Range → Extract Values → Hann Window → Zero-Pad → RFFT
-    → Gain Compensation → Frequency Axis → Fundamental Detection → Spectrum + Harmonics
+Variable Selection → Zoom Range → Extract Values → Window Weighting → Segment Averaging → Zero-Pad → RFFT
+    → Gain Compensation → Amplitude Calibration → Frequency Axis → Fundamental Detection → Spectrum + Harmonics + Auto-Measurements
 ```
 
 ### Encoding Fallback Strategy

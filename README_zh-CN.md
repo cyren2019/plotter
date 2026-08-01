@@ -5,7 +5,7 @@
 一个基于浏览器的轻量级数据可视化工具，支持 CSV 与 Excel 文件导入，自动生成**时序图**、**XY 散点图**、**XYZ 3D 散点图**与 **FFT 频谱分析**。零构建、零依赖运行时，打开即用。
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-v1.2.0-blue)
+![Version](https://img.shields.io/badge/version-v1.2.1-blue)
 
 ---
 
@@ -32,12 +32,15 @@
 | **XYZ 3D 图** | 三变量三维散点（需 echarts-gl） | 3 |
 | **FFT 频谱** | FFT 频域分析，含谐波标记 | 1 |
 
-### FFT 频谱分析 (v1.2.0)
+### FFT 频谱分析 (v1.2.1)
 - 通过 dataZoom 滑块实时 FFT 所选时间范围
-- Hann 窗 + 相干增益补偿，物理值模式显示正确幅值
-- 基于谐波评分的基频自动检测
+- **7 种窗函数**：矩形 / Hann / Hamming / Blackman / Blackman-Harris / 平顶 / Kaiser，自动相干增益补偿
+- **频谱平均化**：单次 / 线性平均 / 指数平均 / 峰值保持（Max-Hold），50% 重叠分段
+- **幅度标定**：峰值 Vpk / 有效值 Vrms / 功率谱密度 PSD（V²/Hz）
+- **自动测量面板**：THD、THD+N、SNR、SFDR、SINAD、噪底实时显示
+- 基于谐波支撑评分的基频自动检测（支持缺次谐波信号，如方波）
 - 谐波标记线（f₀, 2f₀, 3f₀, …）
-- 多种 Y 轴模式：物理值（绝对值）、标幺值（归一化）、dB（对数坐标）
+- 多种 Y 轴模式：物理值（绝对值）、标幺值（归一化）、dB（对数坐标）、dBc（相对基波）
 - 频率单位可切换：Hz、rad/s、deg/s
 - 手动采样率覆盖（适用于非时间戳数据）
 - 基频支持自动检测或手动设定
@@ -122,8 +125,14 @@ python3 -m http.server 8080 -d plotter-app
 ```
 plotter/
 ├── plotter-app/
-│   ├── index.html              # 完整应用（HTML + CSS + JS，约 2890 行）
-│   ├── test_fft.csv            # FFT 测试数据（50 Hz 正弦波、含谐波、方波）
+│   ├── index.html              # 应用外壳（HTML + CSS），按序加载模块脚本
+│   ├── test-data.csv           # 示例测试数据（1 kHz，50 Hz 正弦/方波/谐波/二进制）
+│   ├── js/                     # 应用模块（无构建，普通 script 按序加载）
+│   │   ├── app.js              # 状态管理、事件绑定、初始化
+│   │   ├── i18n.js             # 中英文字典与语言切换
+│   │   ├── file-parse.js       # CSV/Excel 解析、时间列识别、二进制列检测
+│   │   ├── fft.js              # FFT 计算：窗函数、平均化、测量指标、基频检测
+│   │   └── chart-render.js     # renderApp/renderChart 及各模式图表 option 构建
 │   ├── lib/                    # 第三方库（CDN 离线化）
 │   │   ├── dayjs.min.js                # 日期解析 (v1.x)
 │   │   ├── customParseFormat.js        # dayjs 严格解析插件
@@ -136,8 +145,7 @@ plotter/
 │       └── icons.svg
 ├── .gitignore
 ├── README.md
-├── README_zh-CN.md
-└── CLAUDE.md
+└── README_zh-CN.md
 ```
 
 ---
@@ -152,7 +160,7 @@ plotter/
 | **时间解析** | 双阶段：dayjs 原生解析 → 20+ 格式严格匹配 → 宽松匹配兜底 |
 | **CSV 解析** | 自定义解析器，支持引号转义、分隔符自动检测、编码回退 |
 | **Excel 解析** | SheetJS (`xlsx.full.min.js`)，读取首个 Sheet |
-| **FFT 分析** | Hann 窗 → 零填充至 2 的幂 → RFFT → 相干增益补偿 → 谐波评分基频检测 |
+| **FFT 分析** | 7 种窗函数 → 分段平均（线性/指数/峰值保持）→ 零填充至 2 的幂 → RFFT → 相干增益补偿 → 幅度标定（Vpk/Vrms/PSD）→ 谐波支撑评分基频检测 → THD/SNR 自动测量 |
 | **图表引擎** | Apache ECharts 5.x + echarts-gl（3D 支持） |
 
 ### 数据流
@@ -165,8 +173,8 @@ plotter/
 ### FFT 数据流
 
 ```
-变量选择 → 缩放范围 → 提取数值 → Hann 窗 → 零填充 → RFFT
-    → 增益补偿 → 频率轴 → 基频检测 → 频谱图 + 谐波标记
+变量选择 → 缩放范围 → 提取数值 → 窗函数加权 → 分段平均 → 零填充 → RFFT
+    → 增益补偿 → 幅度标定 → 频率轴 → 基频检测 → 频谱图 + 谐波标记 + 自动测量
 ```
 
 ### 编码回退策略

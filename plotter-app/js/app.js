@@ -39,7 +39,7 @@
       return debounced;
     }
     // ===================== Version Check =====================
-    const CURRENT_VERSION = 'v1.2.0';
+    const CURRENT_VERSION = 'v1.2.1';
     let latestVersion = null; // set when a newer version is found
 
     function compareVersions(a, b) {
