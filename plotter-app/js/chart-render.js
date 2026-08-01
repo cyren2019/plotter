@@ -1171,6 +1171,16 @@
       return t('fft_physical');
     }
 
+    // Bar width = 80% of one frequency bin, in the display unit. Computed from the
+    // Hz bin resolution so the rendered pixel width stays identical across frequency
+    // units (switching Hz ↔ rad/s must not change the bar thickness).
+    function getFftBarWidth(binResolutionHz, freqUnit) {
+      const factor = freqUnit === 'rad/s' ? 2 * Math.PI : 1;
+      // Clamp the Hz-equivalent width so thin bars stay visible (unit-invariant)
+      const hzWidth = Math.max(binResolutionHz * 0.8, 0.2);
+      return hzWidth * factor;
+    }
+
     let fftMeasurements = null; // latest auto-measurement results (drives the measurement strip)
 
     function renderFftMeasurements() {
@@ -1381,7 +1391,7 @@
             data: freqData.map((f, i) => [f, magData[i]]),
             xAxisIndex: 0,
             yAxisIndex: 0,
-            barWidth: Math.max(1, (freqData.length > 1 ? (freqData[freqData.length - 1] - freqData[0]) / freqData.length * 0.8 : 1)),
+            barWidth: getFftBarWidth(fftResult.binResolution, fftFreqUnit),
             itemStyle: { color: '#5470c6' }, // match time-series mode palette[0]
             sampling: freqData.length > SAMPLING_THRESHOLD ? 'lttb' : undefined,
             markLine: markLines.length > 0 ? {
@@ -1528,7 +1538,7 @@
               }],
               series: [{
                 data: newFreqData.map((f, i) => [f, newMagData[i]]),
-                barWidth: Math.max(1, (newFreqData.length > 1 ? (newFreqData[newFreqData.length - 1] - newFreqData[0]) / newFreqData.length * 0.8 : 1)),
+                barWidth: getFftBarWidth(result.binResolution, fftFreqUnit),
                 markLine: liveMarkLines.length > 0 ? { silent: true, symbol: 'none', data: liveMarkLines } : undefined,
               }],
             });
