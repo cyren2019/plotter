@@ -1322,11 +1322,11 @@
         },
         grid: [
           {
-            left: '8%', right: '4%', top: '4%', height: '46%',
+            left: '3%', right: '4%', top: '4%', height: '46%',
             containLabel: true,
           },
           {
-            left: '8%', right: '4%', top: '56%', height: '36%',
+            left: '3%', right: '4%', top: '56%', height: '36%',
             containLabel: true,
           },
         ],
@@ -1371,12 +1371,12 @@
         series: [
           {
             name: varName + ' FFT',
-            type: 'bar',
+            type: 'line',
             data: freqData.map((f, i) => [f, magData[i]]),
             xAxisIndex: 0,
             yAxisIndex: 0,
-            barWidth: Math.max(1, (freqData.length > 1 ? (freqData[freqData.length - 1] - freqData[0]) / freqData.length * 0.8 : 1)),
-            itemStyle: { color: '#3b82f6' },
+            symbol: 'none',
+            lineStyle: { width: 1.5 },
             sampling: freqData.length > SAMPLING_THRESHOLD ? 'lttb' : undefined,
             markLine: markLines.length > 0 ? {
               silent: true,
@@ -1391,8 +1391,8 @@
             xAxisIndex: 1,
             yAxisIndex: 1,
             symbol: 'none',
+            lineStyle: { width: 1.5 },
             sampling: rows.length > SAMPLING_THRESHOLD ? 'lttb' : undefined,
-            itemStyle: { color: '#3b82f6' },
           },
         ],
         dataZoom: [
@@ -1521,7 +1521,6 @@
               }],
               series: [{
                 data: newFreqData.map((f, i) => [f, newMagData[i]]),
-                barWidth: Math.max(1, (newFreqData.length > 1 ? (newFreqData[newFreqData.length - 1] - newFreqData[0]) / newFreqData.length * 0.8 : 1)),
                 markLine: liveMarkLines.length > 0 ? { silent: true, symbol: 'none', data: liveMarkLines } : undefined,
               }],
             });
