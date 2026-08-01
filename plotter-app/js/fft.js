@@ -4,7 +4,7 @@
     // ===================== FFT State =====================
     let fftBaseFreq = null;           // null = auto-detect from time data
     let fftFreqUnit = 'Hz';           // 'Hz' | 'rad/s' | 'deg/s'
-    let fftYAxis = 'per-unit';        // 'per-unit' | 'physical' | 'db'
+    let fftYAxis = 'per-unit';        // 'per-unit' | 'physical' | 'db' | 'dbc'
     let fftXAxis = 'linear';          // 'linear' | 'log'
     let fftSampleRateOverride = null; // null = auto-detect; number = manual override (Hz)
     let fftDataZoomStart = 0;         // current dataZoom start percentage
