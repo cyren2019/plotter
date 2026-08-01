@@ -4,12 +4,20 @@
     function escapeHtml(str) {
       return String(str).replace(/[&<>"']/g, s => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
     }
+    // Find the TIME-axis dataZoom (xAxisIndex 1) in an ECharts option — the slider
+    // carries the current time-window selection. Spectrum zooms (xAxisIndex 0) are
+    // visual only and must never be mistaken for the time window.
+    function getTimeDataZoom(opt) {
+      if (!opt || !opt.dataZoom) return null;
+      const isTimeAxis = (d) => (d.xAxisIndex === 1) || (Array.isArray(d.xAxisIndex) && d.xAxisIndex.includes(1));
+      return opt.dataZoom.find(d => isTimeAxis(d) && d.type === 'slider') || opt.dataZoom.find(isTimeAxis) || null;
+    }
     function saveZoomState() {
       if (chartInstance && !restoreZoom) {
         try {
-          const opt = chartInstance.getOption();
-          if (opt && opt.dataZoom && opt.dataZoom.length > 0) {
-            restoreZoom = { start: opt.dataZoom[0].start, end: opt.dataZoom[0].end };
+          const dz = getTimeDataZoom(chartInstance.getOption());
+          if (dz) {
+            restoreZoom = { start: dz.start, end: dz.end };
           }
         } catch (e) { /* ignore */ }
       }
@@ -55,9 +63,9 @@
       // Preserve zoom state across variable selection / mode changes
       if (chartInstance && !restoreZoom) {
         try {
-          const opt = chartInstance.getOption();
-          if (opt && opt.dataZoom && opt.dataZoom.length > 0) {
-            restoreZoom = { start: opt.dataZoom[0].start, end: opt.dataZoom[0].end };
+          const dz = getTimeDataZoom(chartInstance.getOption());
+          if (dz) {
+            restoreZoom = { start: dz.start, end: dz.end };
           }
         } catch (e) { /* ignore */ }
       }
@@ -309,27 +317,6 @@
         <div class="fft-panel" style="display: ${plotType === 'fft' ? 'flex' : 'none'};">
           <div class="fft-panel-row">
             <label class="fft-label">
-              <span>${t('fft_base_freq')}</span>
-              <div class="fft-freq-input-group">
-                <input type="number" class="fft-num-input" id="fftBaseFreqInput"
-                       value="${fftBaseFreq !== null ? fftBaseFreq : ''}"
-                       placeholder="${t('fft_auto')}"
-                       step="any" min="0.001">
-                <span class="fft-unit-label">Hz</span>
-                <span class="fft-nyquist-hint" id="fftNyquistHint"></span>
-              </div>
-            </label>
-            <label class="fft-label">
-              <span>${t('fft_sample_rate')}</span>
-              <div class="fft-freq-input-group">
-                <input type="number" class="fft-num-input" id="fftSampleRateInput"
-                       value="${fftSampleRateOverride !== null ? fftSampleRateOverride : ''}"
-                       placeholder="${t('fft_auto')}"
-                       step="any" min="0.001">
-                <span class="fft-unit-label">Hz</span>
-              </div>
-            </label>
-            <label class="fft-label">
               <span>${t('fft_window')}</span>
               <select class="fft-select" id="fftWindowSelect">
                 <option value="rect" ${fftWindow === 'rect' ? 'selected' : ''}>${t('win_rect')}</option>
@@ -348,7 +335,6 @@
               <div class="fft-segmented">
                 <button class="fft-seg-btn ${fftFreqUnit === 'Hz' ? 'active' : ''}" data-fft-param="freqUnit" data-value="Hz">Hz</button>
                 <button class="fft-seg-btn ${fftFreqUnit === 'rad/s' ? 'active' : ''}" data-fft-param="freqUnit" data-value="rad/s">rad/s</button>
-                <button class="fft-seg-btn ${fftFreqUnit === 'deg/s' ? 'active' : ''}" data-fft-param="freqUnit" data-value="deg/s">deg/s</button>
               </div>
             </label>
             <label class="fft-label">
@@ -357,7 +343,6 @@
                 <button class="fft-seg-btn ${fftYAxis === 'physical' ? 'active' : ''}" data-fft-param="yAxis" data-value="physical">${t('fft_physical')}</button>
                 <button class="fft-seg-btn ${fftYAxis === 'per-unit' ? 'active' : ''}" data-fft-param="yAxis" data-value="per-unit">${t('fft_per_unit')}</button>
                 <button class="fft-seg-btn ${fftYAxis === 'db' ? 'active' : ''}" data-fft-param="yAxis" data-value="db">${t('fft_db')}</button>
-                <button class="fft-seg-btn ${fftYAxis === 'dbc' ? 'active' : ''}" data-fft-param="yAxis" data-value="dbc">${t('fft_dbc')}</button>
               </div>
             </label>
             <label class="fft-label">
@@ -365,7 +350,6 @@
               <div class="fft-segmented">
                 <button class="fft-seg-btn ${fftAmpUnit === 'pk' ? 'active' : ''}" data-fft-param="ampUnit" data-value="pk">${t('amp_pk')}</button>
                 <button class="fft-seg-btn ${fftAmpUnit === 'rms' ? 'active' : ''}" data-fft-param="ampUnit" data-value="rms">${t('amp_rms')}</button>
-                <button class="fft-seg-btn ${fftAmpUnit === 'psd' ? 'active' : ''}" data-fft-param="ampUnit" data-value="psd">${t('amp_psd')}</button>
               </div>
             </label>
             <label class="fft-label">
@@ -384,6 +368,7 @@
                 <button class="fft-seg-btn ${fftAveraging === 'peak' ? 'active' : ''}" data-fft-param="averaging" data-value="peak">${t('avg_peak')}</button>
               </div>
             </label>
+            <span class="fft-nyquist-hint" id="fftNyquistHint"></span>
             <button class="btn btn-primary" id="fftApplyBtn">${t('fft_apply')}</button>
           </div>
         </div>
@@ -467,9 +452,9 @@
           autoScaleBtn.classList.toggle('active', separateAutoScale);
           // Preserve zoom position across auto-scale toggle
           if (chartInstance) {
-            const opt = chartInstance.getOption();
-            if (opt && opt.dataZoom && opt.dataZoom.length > 0) {
-              restoreZoom = { start: opt.dataZoom[0].start, end: opt.dataZoom[0].end };
+            const dz = getTimeDataZoom(chartInstance.getOption());
+            if (dz) {
+              restoreZoom = { start: dz.start, end: dz.end };
             }
           }
           renderChart();
@@ -511,34 +496,6 @@
           });
         });
 
-        // Base frequency input
-        const fftBaseFreqInput = fftPanel.querySelector('#fftBaseFreqInput');
-        if (fftBaseFreqInput) {
-          fftBaseFreqInput.addEventListener('input', () => {
-            const val = fftBaseFreqInput.value.trim();
-            if (val === '') {
-              fftBaseFreq = null;
-            } else {
-              const n = parseFloat(val);
-              if (!isNaN(n) && n > 0) fftBaseFreq = n;
-            }
-          });
-        }
-
-        // Sample rate override input
-        const fftSampleRateInput = fftPanel.querySelector('#fftSampleRateInput');
-        if (fftSampleRateInput) {
-          fftSampleRateInput.addEventListener('input', () => {
-            const val = fftSampleRateInput.value.trim();
-            if (val === '') {
-              fftSampleRateOverride = null;
-            } else {
-              const n = parseFloat(val);
-              if (!isNaN(n) && n > 0) fftSampleRateOverride = n;
-            }
-          });
-        }
-
         // Window function select
         const fftWindowSelect = fftPanel.querySelector('#fftWindowSelect');
         if (fftWindowSelect) {
@@ -555,19 +512,6 @@
             fftPanel.querySelectorAll('.fft-seg-btn.active[data-fft-param]').forEach(b => {
               applyFftParam(b.dataset.fftParam, b.dataset.value);
             });
-            // Re-read frequency inputs
-            const freqInput = fftPanel.querySelector('#fftBaseFreqInput');
-            if (freqInput) {
-              const val = freqInput.value.trim();
-              if (val === '') fftBaseFreq = null;
-              else { const n = parseFloat(val); if (!isNaN(n) && n > 0) fftBaseFreq = n; }
-            }
-            const srInput = fftPanel.querySelector('#fftSampleRateInput');
-            if (srInput) {
-              const val = srInput.value.trim();
-              if (val === '') fftSampleRateOverride = null;
-              else { const n = parseFloat(val); if (!isNaN(n) && n > 0) fftSampleRateOverride = n; }
-            }
             const winSelect = fftPanel.querySelector('#fftWindowSelect');
             if (winSelect && FFT_WINDOWS[winSelect.value]) fftWindow = winSelect.value;
             // Re-render chart with new params
@@ -1223,9 +1167,7 @@
     function getFftYAxisName() {
       if (fftYAxis === 'per-unit') return t('fft_per_unit');
       if (fftYAxis === 'db') return t('fft_db');
-      if (fftYAxis === 'dbc') return t('fft_dbc');
       if (fftAmpUnit === 'rms') return t('amp_rms_label');
-      if (fftAmpUnit === 'psd') return t('amp_psd_label');
       return t('fft_physical');
     }
 
@@ -1242,9 +1184,7 @@
       box.style.display = 'flex';
       const m = fftMeasurements;
       const f0 = m.fundamental.freq;
-      const f0Label = fftFreqUnit === 'rad/s' ? (f0 * 2 * Math.PI).toFixed(2) + ' rad/s'
-        : fftFreqUnit === 'deg/s' ? (f0 * 360).toFixed(2) + ' deg/s'
-        : f0.toFixed(2) + ' Hz';
+      const f0Label = fftFreqUnit === 'rad/s' ? (f0 * 2 * Math.PI).toFixed(2) + ' rad/s' : f0.toFixed(2) + ' Hz';
       const fmtDb = (v) => (v === Infinity || v === -Infinity) ? '∞' : (Number.isFinite(v) ? v.toFixed(1) + ' dB' : '-');
       set('mF0', f0Label);
       set('mTHD', m.thd.pct.toFixed(2) + '%');
@@ -1270,9 +1210,9 @@
       const clampedStart = Math.max(0, startIdx);
       const clampedEnd = Math.min(rows.length, Math.max(clampedStart + 2, endIdx));
 
-      // Compute sample rate and FFT
+      // Compute sample rate and FFT (sample rate always auto-detected)
       const srInfo = detectSampleRate(rows, timeColumn);
-      let sampleRate = fftSampleRateOverride !== null ? fftSampleRateOverride : srInfo.sampleRate;
+      const sampleRate = srInfo.sampleRate;
       const fftResult = computeAveragedFFT(rows, varName, clampedStart, clampedEnd, sampleRate, fftWindow, fftAveraging);
 
       // Build frequency axis and magnitude data
@@ -1285,19 +1225,11 @@
       fftMeasurements = null;
 
       if (fftResult) {
-        // Fundamental frequency: auto-detect or manual
-        let baseFreq;
-        if (fftBaseFreq !== null && fftBaseFreq > 0) {
-          const nyquist = sampleRate / 2;
-          const minFreq = sampleRate / Math.max(fftResult.dataLength, 2);
-          baseFreq = Math.max(minFreq, Math.min(fftBaseFreq, nyquist));
-          f0confidence = 'manual';
-        } else {
-          const detected = autoDetectBaseFreq(fftResult.magnitudes, fftResult.freqs, sampleRate, fftResult.fftSize);
-          baseFreq = detected.freq;
-          f0confidence = detected.confidence || 'unknown';
-          autoDetectedF0 = baseFreq;
-        }
+        // Fundamental frequency: auto-detected (no manual override)
+        const detected = autoDetectBaseFreq(fftResult.magnitudes, fftResult.freqs, sampleRate, fftResult.fftSize);
+        const baseFreq = detected.freq;
+        f0confidence = detected.confidence || 'unknown';
+        autoDetectedF0 = baseFreq;
 
         // Auto-measurements (THD / THD+N / SNR / SFDR / SINAD / noise floor)
         fftMeasurements = computeMeasurements(fftResult.magnitudes, fftResult.freqs, sampleRate, fftResult.fftSize, baseFreq);
@@ -1315,14 +1247,6 @@
             scaled[i] = i === 0 ? magnitudes[i] : magnitudes[i] / Math.SQRT2;
           }
           magnitudes = scaled;
-        } else if (fftAmpUnit === 'psd') {
-          // Power spectral density: |X|² / (fs · ENBW) → V²/Hz
-          const denom = sampleRate * (fftResult.enbw || 1.5);
-          const scaled = new Float64Array(magnitudes.length);
-          for (let i = 0; i < magnitudes.length; i++) {
-            scaled[i] = (magnitudes[i] * magnitudes[i]) / denom;
-          }
-          magnitudes = scaled;
         }
         // 'pk': leave as coherent-gain-compensated peak magnitudes
 
@@ -1338,18 +1262,11 @@
             for (let i = 0; i < magnitudes.length; i++) scaled[i] = magnitudes[i] / maxMag;
             magnitudes = scaled;
           }
-        } else if (fftYAxis === 'db' || fftYAxis === 'dbc') {
-          // dB: 20*log10(magnitude), referenced to max; dBc: referenced to fundamental
+        } else if (fftYAxis === 'db') {
+          // dB: 20*log10(magnitude), referenced to max (excluding DC)
           let refMag = 1.0;
-          if (fftYAxis === 'dbc') {
-            const binIdx = Math.round(baseFreq / fftResult.binResolution);
-            if (binIdx > 0 && binIdx < magnitudes.length && magnitudes[binIdx] > 0) {
-              refMag = magnitudes[binIdx];
-            } else {
-              for (let i = 1; i < magnitudes.length; i++) if (magnitudes[i] > refMag) refMag = magnitudes[i];
-            }
-          } else {
-            for (let i = 1; i < magnitudes.length; i++) if (magnitudes[i] > refMag) refMag = magnitudes[i];
+          for (let i = 1; i < magnitudes.length; i++) {
+            if (magnitudes[i] > refMag) refMag = magnitudes[i];
           }
           const dbFloor = -120;
           const converted = new Float64Array(magnitudes.length);
@@ -1358,9 +1275,6 @@
             converted[i] = val > 1e-10 ? 20 * Math.log10(val) : dbFloor;
           }
           magnitudes = converted;
-        } else if (fftBaseFreq !== null && fftBaseFreq > 0 && autoDetectedF0 === null) {
-          // If manual f0 is set, normalise to fundamental magnitude
-          autoDetectedF0 = baseFreq;
         }
 
         // Harmonic markLines at f0, 2f0, 3f0... up to Nyquist (max 20)
@@ -1369,8 +1283,7 @@
         for (let h = 1; h <= 20; h++) {
           const harmonicFreq = h * f0;
           if (harmonicFreq > nyquistLimit * 0.99) break;
-          const displayFreq = fftFreqUnit === 'rad/s' ? harmonicFreq * 2 * Math.PI
-            : fftFreqUnit === 'deg/s' ? harmonicFreq * 360 : harmonicFreq;
+          const displayFreq = fftFreqUnit === 'rad/s' ? harmonicFreq * 2 * Math.PI : harmonicFreq;
           markLines.push({
             xAxis: displayFreq,
             lineStyle: { type: 'dashed', color: h === 1 ? 'rgba(239,68,68,0.5)' : 'rgba(156,163,175,0.25)', width: h === 1 ? 1.5 : 0.5 },
@@ -1406,11 +1319,11 @@
         },
         grid: [
           {
-            left: '8%', right: '4%', top: '5%', height: '50%',
+            left: '8%', right: '4%', top: '4%', height: '46%',
             containLabel: true,
           },
           {
-            left: '8%', right: '4%', top: '62%', height: '35%',
+            left: '8%', right: '4%', top: '56%', height: '36%',
             containLabel: true,
           },
         ],
@@ -1480,12 +1393,27 @@
           },
         ],
         dataZoom: [
+          // Spectrum frequency-axis zoom (visual only — does not trigger FFT recompute)
+          {
+            type: 'slider',
+            xAxisIndex: 0,
+            bottom: '46%',
+            borderColor: tc.splitLine,
+            fillerColor: isDark ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.1)',
+            handleStyle: { color: tc.axisLine },
+            textStyle: { color: tc.text },
+          },
+          {
+            type: 'inside',
+            xAxisIndex: 0,
+          },
+          // Time-window selection (drives FFT recompute)
           {
             type: 'slider',
             xAxisIndex: 1,
             start: zoomStart,
             end: zoomEnd,
-            bottom: '2%',
+            bottom: '1%',
             borderColor: tc.splitLine,
             fillerColor: isDark ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.1)',
             handleStyle: { color: tc.axisLine },
@@ -1503,34 +1431,41 @@
       // Attach dataZoom event for real-time FFT update
       // Cancel previous handler if any
       if (fftDataZoomHandler && fftDataZoomHandler.cancel) fftDataZoomHandler.cancel();
-      fftDataZoomHandler = debounce(() => {
+      fftDataZoomHandler = debounce((e) => {
         if (!chartInstance || plotType !== 'fft') return;
         const opt = chartInstance.getOption();
-        if (opt && opt.dataZoom && opt.dataZoom.length > 0) {
-          const dz = opt.dataZoom[0];
-          const start = dz.start || 0;
-          const end = dz.end || 100;
-          fftDataZoomStart = start;
-          fftDataZoomEnd = end;
+        if (!opt || !opt.dataZoom || opt.dataZoom.length === 0) return;
 
-          const sIdx = Math.floor(rows.length * start / 100);
-          const eIdx = Math.min(Math.ceil(rows.length * end / 100), rows.length);
-          const cs = Math.max(0, sIdx);
-          const ce = Math.min(rows.length, Math.max(cs + 2, eIdx));
+        // Only recompute when the TIME-axis dataZoom (xAxisIndex 1) was involved.
+        // Spectrum-axis zooms (xAxisIndex 0) are purely visual.
+        const batch = (e && Array.isArray(e.batch) && e.batch.length) ? e.batch : [e];
+        const timeTouched = batch.some(ev => {
+          const dz = ev && opt.dataZoom[ev.dataZoomIndex];
+          return dz && ((dz.xAxisIndex === 1) || (Array.isArray(dz.xAxisIndex) && dz.xAxisIndex.includes(1)));
+        });
+        if (!timeTouched) return;
 
-          const srInfo = detectSampleRate(rows, timeColumn);
-          const sr = fftSampleRateOverride !== null ? fftSampleRateOverride : srInfo.sampleRate;
-          const result = computeAveragedFFT(rows, varName, cs, ce, sr, fftWindow, fftAveraging);
+        const timeDZ = opt.dataZoom.find(d =>
+          ((d.xAxisIndex === 1) || (Array.isArray(d.xAxisIndex) && d.xAxisIndex.includes(1))) && d.type === 'slider'
+        );
+        const start = timeDZ ? (timeDZ.start || 0) : 0;
+        const end = timeDZ ? (timeDZ.end || 100) : 100;
+        fftDataZoomStart = start;
+        fftDataZoomEnd = end;
+
+        const sIdx = Math.floor(rows.length * start / 100);
+        const eIdx = Math.min(Math.ceil(rows.length * end / 100), rows.length);
+        const cs = Math.max(0, sIdx);
+        const ce = Math.min(rows.length, Math.max(cs + 2, eIdx));
+
+        const srInfo = detectSampleRate(rows, timeColumn);
+        const sr = srInfo.sampleRate;
+        const result = computeAveragedFFT(rows, varName, cs, ce, sr, fftWindow, fftAveraging);
 
           if (result) {
-            // Fundamental freq: auto-detect or manual
-            let bFreq;
-            if (fftBaseFreq !== null && fftBaseFreq > 0) {
-              bFreq = Math.max(sr / Math.max(result.dataLength, 2), Math.min(fftBaseFreq, sr / 2));
-            } else {
-              const detected = autoDetectBaseFreq(result.magnitudes, result.freqs, sr, result.fftSize);
-              bFreq = detected.freq;
-            }
+            // Fundamental freq: auto-detected (no manual override)
+            const detected = autoDetectBaseFreq(result.magnitudes, result.freqs, sr, result.fftSize);
+            const bFreq = detected.freq;
 
             // Auto-measurements (live update on zoom)
             fftMeasurements = computeMeasurements(result.magnitudes, result.freqs, sr, result.fftSize, bFreq);
@@ -1545,11 +1480,6 @@
               const scaled = new Float64Array(mags.length);
               for (let i = 0; i < mags.length; i++) scaled[i] = i === 0 ? mags[i] : mags[i] / Math.SQRT2;
               mags = scaled;
-            } else if (fftAmpUnit === 'psd') {
-              const denom = sr * (result.enbw || 1.5);
-              const scaled = new Float64Array(mags.length);
-              for (let i = 0; i < mags.length; i++) scaled[i] = (mags[i] * mags[i]) / denom;
-              mags = scaled;
             }
 
             // Y-axis display transform
@@ -1561,15 +1491,9 @@
                 for (let i = 0; i < mags.length; i++) scaled[i] = mags[i] / maxM;
                 mags = scaled;
               }
-            } else if (fftYAxis === 'db' || fftYAxis === 'dbc') {
+            } else if (fftYAxis === 'db') {
               let refMag = 1.0;
-              if (fftYAxis === 'dbc') {
-                const binIdx = Math.round(bFreq / result.binResolution);
-                if (binIdx > 0 && binIdx < mags.length && mags[binIdx] > 0) refMag = mags[binIdx];
-                else for (let i = 1; i < mags.length; i++) { if (mags[i] > refMag) refMag = mags[i]; }
-              } else {
-                for (let i = 1; i < mags.length; i++) { if (mags[i] > refMag) refMag = mags[i]; }
-              }
+              for (let i = 1; i < mags.length; i++) { if (mags[i] > refMag) refMag = mags[i]; }
               const dbFloor = -120;
               const converted = new Float64Array(mags.length);
               for (let i = 0; i < mags.length; i++) {
@@ -1585,7 +1509,7 @@
             for (let h = 1; h <= 20; h++) {
               const hf = h * bFreq;
               if (hf > nyq * 0.99) break;
-              const df = fftFreqUnit === 'rad/s' ? hf * 2 * Math.PI : fftFreqUnit === 'deg/s' ? hf * 360 : hf;
+              const df = fftFreqUnit === 'rad/s' ? hf * 2 * Math.PI : hf;
               liveMarkLines.push({
                 xAxis: df,
                 lineStyle: { type: 'dashed', color: h === 1 ? 'rgba(239,68,68,0.5)' : 'rgba(156,163,175,0.25)', width: h === 1 ? 1.5 : 0.5 },
@@ -1608,7 +1532,6 @@
             });
             renderFftMeasurements();
           }
-        }
       }, 150);
 
       // Remove previous listener and attach new one
