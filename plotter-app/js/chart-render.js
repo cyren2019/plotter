@@ -1329,6 +1329,24 @@
         tooltip: {
           trigger: 'axis',
           axisPointer: { type: 'cross' },
+          // Note the x-axis frequency unit in the spectrum tooltip (x-axis name label is hidden)
+          formatter: (params) => {
+            const arr = Array.isArray(params) ? params : [params];
+            const unit = freqUnitLabel;
+            return arr.map(p => {
+              const name = p.seriesName || '';
+              if (name.endsWith('FFT')) {
+                const v = p.value;
+                const x = Array.isArray(v) ? v[0] : p.axisValue;
+                const y = Array.isArray(v) ? v[1] : v;
+                const xStr = (typeof x === 'number' && isFinite(x)) ? x.toFixed(3) + ' ' + unit : String(x);
+                const yStr = (typeof y === 'number' && isFinite(y)) ? y.toFixed(3) : String(y);
+                return p.marker + ' ' + name + '<br/>' + xStr + '<br/>' + getFftYAxisName() + ': ' + yStr;
+              }
+              const y = Array.isArray(p.value) ? p.value[1] : p.value;
+              return p.marker + ' ' + name + ': ' + (y != null ? y : '-');
+            }).join('<br/>');
+          },
         },
         grid: [
           // Spectrum fills the space above the fixed-height time preview
@@ -1345,10 +1363,6 @@
         xAxis: [
           {
             type: fftXAxis === 'log' ? 'log' : 'value',
-            name: t('fft_freq_unit') + ' (' + freqUnitLabel + ')',
-            nameLocation: 'center',
-            nameGap: 25,
-            nameTextStyle: { fontSize: 11, color: tc.text },
             axisLabel: { color: tc.text, fontSize: 10 },
             splitLine: { lineStyle: { color: tc.splitLine } },
             gridIndex: 0,
