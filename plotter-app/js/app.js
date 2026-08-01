@@ -213,7 +213,6 @@
     // Global resize (debounced)
     const debouncedResize = debounce(() => {
       if (chartInstance) chartInstance.resize();
-      if (typeof updateFftSplitter === 'function') updateFftSplitter();
     }, 100);
     window.addEventListener('resize', debouncedResize);
 
