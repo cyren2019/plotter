@@ -1204,6 +1204,9 @@
       const zoomStart = restoreZoom ? restoreZoom.start : fftDataZoomStart;
       const zoomEnd = restoreZoom ? restoreZoom.end : fftDataZoomEnd;
       restoreZoom = null;
+      // Keep the change-detection tracking in sync with the rendered time slider
+      fftDataZoomStart = zoomStart;
+      fftDataZoomEnd = zoomEnd;
 
       const startIdx = Math.floor(rows.length * zoomStart / 100);
       const endIdx = Math.min(Math.ceil(rows.length * zoomEnd / 100), rows.length);
@@ -1431,25 +1434,17 @@
       // Attach dataZoom event for real-time FFT update
       // Cancel previous handler if any
       if (fftDataZoomHandler && fftDataZoomHandler.cancel) fftDataZoomHandler.cancel();
-      fftDataZoomHandler = debounce((e) => {
+      fftDataZoomHandler = debounce(() => {
         if (!chartInstance || plotType !== 'fft') return;
         const opt = chartInstance.getOption();
-        if (!opt || !opt.dataZoom || opt.dataZoom.length === 0) return;
-
-        // Only recompute when the TIME-axis dataZoom (xAxisIndex 1) was involved.
-        // Spectrum-axis zooms (xAxisIndex 0) are purely visual.
-        const batch = (e && Array.isArray(e.batch) && e.batch.length) ? e.batch : [e];
-        const timeTouched = batch.some(ev => {
-          const dz = ev && opt.dataZoom[ev.dataZoomIndex];
-          return dz && ((dz.xAxisIndex === 1) || (Array.isArray(dz.xAxisIndex) && dz.xAxisIndex.includes(1)));
-        });
-        if (!timeTouched) return;
-
-        const timeDZ = opt.dataZoom.find(d =>
-          ((d.xAxisIndex === 1) || (Array.isArray(d.xAxisIndex) && d.xAxisIndex.includes(1))) && d.type === 'slider'
-        );
-        const start = timeDZ ? (timeDZ.start || 0) : 0;
-        const end = timeDZ ? (timeDZ.end || 100) : 100;
+        const timeDZ = getTimeDataZoom(opt);
+        if (!timeDZ) return;
+        const start = timeDZ.start || 0;
+        const end = timeDZ.end || 100;
+        // Only recompute when the time window actually changed. Spectrum-axis zooms
+        // (xAxisIndex 0) leave the time window untouched and are purely visual, so
+        // they fall through here without triggering a recompute.
+        if (Math.abs(start - fftDataZoomStart) < 0.01 && Math.abs(end - fftDataZoomEnd) < 0.01) return;
         fftDataZoomStart = start;
         fftDataZoomEnd = end;
 
