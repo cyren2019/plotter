@@ -366,6 +366,15 @@
                 <button class="fft-seg-btn ${fftXAxis === 'log' ? 'active' : ''}" data-fft-param="xAxis" data-value="log">${t('fft_log')}</button>
               </div>
             </label>
+            <label class="fft-label">
+              <span>${t('fft_avg')}</span>
+              <div class="fft-segmented">
+                <button class="fft-seg-btn ${fftAveraging === 'none' ? 'active' : ''}" data-fft-param="averaging" data-value="none">${t('avg_none')}</button>
+                <button class="fft-seg-btn ${fftAveraging === 'linear' ? 'active' : ''}" data-fft-param="averaging" data-value="linear">${t('avg_linear')}</button>
+                <button class="fft-seg-btn ${fftAveraging === 'exp' ? 'active' : ''}" data-fft-param="averaging" data-value="exp">${t('avg_exp')}</button>
+                <button class="fft-seg-btn ${fftAveraging === 'peak' ? 'active' : ''}" data-fft-param="averaging" data-value="peak">${t('avg_peak')}</button>
+              </div>
+            </label>
             <button class="btn btn-primary" id="fftApplyBtn">${t('fft_apply')}</button>
           </div>
         </div>
@@ -466,13 +475,15 @@
       const fftPanel = plotSection.querySelector('.fft-panel');
       if (fftPanel) {
         // Segmented button groups
+        const applyFftParam = (param, value) => {
+          if (param === 'freqUnit') fftFreqUnit = value;
+          else if (param === 'yAxis') fftYAxis = value;
+          else if (param === 'xAxis') fftXAxis = value;
+          else if (param === 'averaging') fftAveraging = value;
+        };
         fftPanel.querySelectorAll('.fft-seg-btn[data-fft-param]').forEach(btn => {
           btn.addEventListener('click', () => {
-            const param = btn.dataset.fftParam;
-            const value = btn.dataset.value;
-            if (param === 'freqUnit') fftFreqUnit = value;
-            else if (param === 'yAxis') fftYAxis = value;
-            else if (param === 'xAxis') fftXAxis = value;
+            applyFftParam(btn.dataset.fftParam, btn.dataset.value);
             const group = btn.closest('.fft-segmented');
             if (group) {
               group.querySelectorAll('.fft-seg-btn').forEach(b => b.classList.remove('active'));
@@ -521,13 +532,10 @@
         const fftApplyBtn = fftPanel.querySelector('#fftApplyBtn');
         if (fftApplyBtn) {
           fftApplyBtn.addEventListener('click', () => {
-            // Re-read DOM values to ensure they're synced
-            const selUnit = fftPanel.querySelector('.fft-seg-btn.active[data-fft-param="freqUnit"]');
-            const selY = fftPanel.querySelector('.fft-seg-btn.active[data-fft-param="yAxis"]');
-            const selX = fftPanel.querySelector('.fft-seg-btn.active[data-fft-param="xAxis"]');
-            if (selUnit) fftFreqUnit = selUnit.dataset.value;
-            if (selY) fftYAxis = selY.dataset.value;
-            if (selX) fftXAxis = selX.dataset.value;
+            // Re-read DOM values to ensure they're synced (all segmented params)
+            fftPanel.querySelectorAll('.fft-seg-btn.active[data-fft-param]').forEach(b => {
+              applyFftParam(b.dataset.fftParam, b.dataset.value);
+            });
             // Re-read frequency inputs
             const freqInput = fftPanel.querySelector('#fftBaseFreqInput');
             if (freqInput) {
@@ -1211,7 +1219,7 @@
       // Compute sample rate and FFT
       const srInfo = detectSampleRate(rows, timeColumn);
       let sampleRate = fftSampleRateOverride !== null ? fftSampleRateOverride : srInfo.sampleRate;
-      const fftResult = computeFFT(rows, varName, clampedStart, clampedEnd, sampleRate, fftWindow);
+      const fftResult = computeAveragedFFT(rows, varName, clampedStart, clampedEnd, sampleRate, fftWindow, fftAveraging);
 
       // Build frequency axis and magnitude data
       let freqData = [];
@@ -1426,7 +1434,7 @@
 
           const srInfo = detectSampleRate(rows, timeColumn);
           const sr = fftSampleRateOverride !== null ? fftSampleRateOverride : srInfo.sampleRate;
-          const result = computeFFT(rows, varName, cs, ce, sr, fftWindow);
+          const result = computeAveragedFFT(rows, varName, cs, ce, sr, fftWindow, fftAveraging);
 
           if (result) {
             // Fundamental freq: auto-detect or manual

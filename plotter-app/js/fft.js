@@ -11,6 +11,7 @@
     let fftDataZoomEnd = 100;         // current dataZoom end percentage
     let fftDataZoomHandler = null;    // debounced dataZoom event handler reference
     let fftWindow = 'hann';           // window function (see FFT_WINDOWS registry)
+    let fftAveraging = 'none';        // 'none' | 'linear' | 'exp' | 'peak'
 
     // ===================== Window Functions =====================
     // Window registry: name → { enbw (noise-equivalent bandwidth in bins), create(N) }.
@@ -217,6 +218,97 @@
         windowName: windowName || 'hann',
         enbw: win.enbw,
         coherentGain: coherentGain,
+      };
+    }
+
+    // Averaged FFT: split the range into 50%-overlapping segments and combine spectra.
+    //  - 'linear' : arithmetic mean of segment magnitudes (noise power averaging)
+    //  - 'exp'    : exponentially-weighted moving average (alpha = 0.3), weights recent segments
+    //  - 'peak'   : max-hold — element-wise maximum across segments (captures transients/spurs)
+    function computeAveragedFFT(rows, varName, startIdx, endIdx, sampleRate, windowName, averaging) {
+      const rawValues = [];
+      for (let i = startIdx; i < endIdx && i < rows.length; i++) {
+        const val = rows[i][varName];
+        if (val !== null && val !== undefined && Number.isFinite(Number(val))) {
+          rawValues.push(Number(val));
+        }
+      }
+      const total = rawValues.length;
+      if (total < 2) return null;
+
+      const mode = averaging || 'none';
+      if (mode === 'none') {
+        return computeFFT(rows, varName, startIdx, endIdx, sampleRate, windowName);
+      }
+
+      // Segment layout: segment length ~ half the range (≥64), 50% overlap, max 32 segments.
+      const baseN = nextPowerOf2(total);
+      const segLen = Math.max(64, Math.min(baseN, Math.floor(total / 2)));
+      const hop = Math.max(1, Math.floor(segLen / 2));
+      const MAX_SEGMENTS = 32;
+      const K = Math.min(MAX_SEGMENTS, Math.floor((total - segLen) / hop) + 1);
+      if (K < 2) {
+        // Not enough data to split meaningfully — fall back to a single FFT
+        return computeFFT(rows, varName, startIdx, endIdx, sampleRate, windowName);
+      }
+
+      const win = getWindow(windowName || 'hann');
+      const window = win.create(segLen);
+      let windowSum = 0;
+      for (let i = 0; i < segLen; i++) windowSum += window[i];
+      const coherentGain = windowSum / segLen;
+
+      const fftSize = nextPowerOf2(segLen);
+      const numBins = fftSize / 2 + 1; // rfft positive-frequency bins
+      const freqs = new Float64Array(numBins);
+      for (let i = 0; i < numBins; i++) freqs[i] = i * (sampleRate / fftSize);
+
+      const spectrumOf = (off) => {
+        const padded = new Float64Array(fftSize);
+        for (let i = 0; i < segLen; i++) padded[i] = rawValues[off + i] * window[i];
+        const mags = FourierTransform.rfft(padded);
+        for (let i = 0; i < numBins; i++) mags[i] = mags[i] / coherentGain;
+        return mags;
+      };
+
+      let magnitudes;
+      if (mode === 'peak') {
+        magnitudes = new Float64Array(numBins).fill(-Infinity);
+        for (let s = 0; s < K; s++) {
+          const mags = spectrumOf(s * hop);
+          for (let b = 0; b < numBins; b++) if (mags[b] > magnitudes[b]) magnitudes[b] = mags[b];
+        }
+      } else if (mode === 'exp') {
+        const alpha = 0.3;
+        let avg = null;
+        for (let s = 0; s < K; s++) {
+          const mags = spectrumOf(s * hop);
+          if (avg === null) { avg = mags; }
+          else for (let b = 0; b < numBins; b++) avg[b] = alpha * mags[b] + (1 - alpha) * avg[b];
+        }
+        magnitudes = avg;
+      } else { // 'linear'
+        const acc = new Float64Array(numBins);
+        for (let s = 0; s < K; s++) {
+          const mags = spectrumOf(s * hop);
+          for (let b = 0; b < numBins; b++) acc[b] += mags[b];
+        }
+        magnitudes = new Float64Array(numBins);
+        for (let b = 0; b < numBins; b++) magnitudes[b] = acc[b] / K;
+      }
+
+      return {
+        magnitudes: magnitudes,
+        freqs: freqs,
+        numBins: numBins,
+        fftSize: fftSize,
+        dataLength: total,
+        binResolution: sampleRate / fftSize,
+        windowName: windowName || 'hann',
+        enbw: win.enbw,
+        coherentGain: coherentGain,
+        averaging: mode,
+        segments: K,
       };
     }
 
