@@ -1354,6 +1354,8 @@
           {
             type: 'value',
             name: getFftYAxisName(),
+            nameLocation: 'middle',
+            nameGap: 30,
             nameTextStyle: { fontSize: 11, color: tc.text },
             axisLabel: { color: tc.text, fontSize: 10 },
             splitLine: { lineStyle: { color: tc.splitLine } },
@@ -1362,6 +1364,8 @@
           {
             type: 'value',
             name: varName,
+            nameLocation: 'middle',
+            nameGap: 30,
             nameTextStyle: { fontSize: 11, color: tc.text },
             axisLabel: { color: tc.text, fontSize: 10 },
             splitLine: { lineStyle: { color: tc.splitLine } },
@@ -1371,12 +1375,11 @@
         series: [
           {
             name: varName + ' FFT',
-            type: 'line',
+            type: 'bar',
             data: freqData.map((f, i) => [f, magData[i]]),
             xAxisIndex: 0,
             yAxisIndex: 0,
-            symbol: 'none',
-            lineStyle: { width: 1.5 },
+            barWidth: Math.max(1, (freqData.length > 1 ? (freqData[freqData.length - 1] - freqData[0]) / freqData.length * 0.8 : 1)),
             sampling: freqData.length > SAMPLING_THRESHOLD ? 'lttb' : undefined,
             markLine: markLines.length > 0 ? {
               silent: true,
@@ -1521,6 +1524,7 @@
               }],
               series: [{
                 data: newFreqData.map((f, i) => [f, newMagData[i]]),
+                barWidth: Math.max(1, (newFreqData.length > 1 ? (newFreqData[newFreqData.length - 1] - newFreqData[0]) / newFreqData.length * 0.8 : 1)),
                 markLine: liveMarkLines.length > 0 ? { silent: true, symbol: 'none', data: liveMarkLines } : undefined,
               }],
             });
