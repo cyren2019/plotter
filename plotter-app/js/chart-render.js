@@ -385,6 +385,7 @@
         <div class="plot-container">
           <div id="chart"></div>
           <div class="chart-msg" id="chartMsg"></div>
+          <div class="fft-splitter" id="fftSplitter" style="display:none;"></div>
         </div>
       `;
 
@@ -519,6 +520,51 @@
             renderChart();
           });
         }
+      }
+
+      // FFT splitter: drag to resize the spectrum / time panel heights together
+      const fftSplitter = plotSection.querySelector('#fftSplitter');
+      if (fftSplitter) {
+        fftSplitter.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          const container = fftSplitter.parentElement;
+          const h = container ? container.clientHeight : 0;
+          if (h <= 0) return;
+          const startY = e.clientY;
+          const startSplit = fftSplit;
+          const applyLayout = (layout) => {
+            if (chartInstance) {
+              chartInstance.setOption({
+                grid: [
+                  { top: layout.grid0.top + '%', height: layout.grid0.height + '%' },
+                  { top: layout.grid1.top + '%', height: layout.grid1.height + '%' },
+                ],
+                dataZoom: [
+                  { bottom: layout.spectrumSliderBottom + '%' },
+                  {},
+                  { bottom: layout.timeSliderBottom + '%' },
+                  {},
+                ],
+              });
+            }
+            updateFftSplitter();
+          };
+          const onMove = (ev) => {
+            const delta = (ev.clientY - startY) / h;
+            fftSplit = Math.min(FFT_SPLIT_MAX, Math.max(FFT_SPLIT_MIN, startSplit + delta));
+            applyLayout(getFftGridLayout());
+          };
+          const onUp = () => {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+          };
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+          document.body.style.cursor = 'row-resize';
+          document.body.style.userSelect = 'none';
+        });
       }
 
       mainArea.innerHTML = '';
@@ -1164,11 +1210,43 @@
       };
     }
 
+    // Resizable split between the spectrum (top) and time preview (bottom) panels.
+    // fftSplit is the spectrum panel's share of the plot area (0.15–0.85).
+    let fftSplit = 0.5;
+    const FFT_SPLIT_MIN = 0.15, FFT_SPLIT_MAX = 0.85;
+
+    // Vertical layout in % of the chart container:
+    //   topPad … grid0(spectrum) … spectrum-slider … grid1(time) … time-slider … bottomPad
+    function getFftGridLayout() {
+      const topPad = 3, bottomPad = 1, sliderH = 5;
+      const available = 100 - topPad - bottomPad - 2 * sliderH;
+      const spectrumH = available * fftSplit;
+      const timeH = available - spectrumH;
+      return {
+        grid0: { top: topPad, height: spectrumH },
+        grid1: { top: topPad + spectrumH + sliderH, height: timeH },
+        spectrumSliderBottom: bottomPad + timeH + sliderH,
+        timeSliderBottom: bottomPad,
+        splitterTop: topPad + spectrumH, // % from top of container
+      };
+    }
+
     function getFftYAxisName() {
       if (fftYAxis === 'per-unit') return t('fft_per_unit');
       if (fftYAxis === 'db') return t('fft_db');
       if (fftAmpUnit === 'rms') return t('amp_rms_label');
       return t('fft_physical');
+    }
+
+    // Position the draggable splitter at the spectrum/time panel boundary.
+    function updateFftSplitter() {
+      const el = document.getElementById('fftSplitter');
+      if (!el) return;
+      if (plotType !== 'fft') { el.style.display = 'none'; return; }
+      const container = el.parentElement;
+      const h = container ? container.clientHeight : 0;
+      el.style.display = 'block';
+      el.style.top = Math.round(h * getFftGridLayout().splitterTop / 100) + 'px';
     }
 
     let fftMeasurements = null; // latest auto-measurement results (drives the measurement strip)
@@ -1199,6 +1277,7 @@
       const { rows, timeColumn } = data;
       const varName = selectedVars[0];
       const tc = getThemeColors();
+      const layout = getFftGridLayout();
 
       // Determine data range from zoom state
       const zoomStart = restoreZoom ? restoreZoom.start : fftDataZoomStart;
@@ -1322,11 +1401,11 @@
         },
         grid: [
           {
-            left: '3%', right: '4%', top: '4%', height: '46%',
+            left: '3%', right: '4%', top: layout.grid0.top + '%', height: layout.grid0.height + '%',
             containLabel: true,
           },
           {
-            left: '3%', right: '4%', top: '56%', height: '36%',
+            left: '3%', right: '4%', top: layout.grid1.top + '%', height: layout.grid1.height + '%',
             containLabel: true,
           },
         ],
@@ -1380,6 +1459,7 @@
             xAxisIndex: 0,
             yAxisIndex: 0,
             barWidth: Math.max(1, (freqData.length > 1 ? (freqData[freqData.length - 1] - freqData[0]) / freqData.length * 0.8 : 1)),
+            itemStyle: { color: '#5470c6' },
             sampling: freqData.length > SAMPLING_THRESHOLD ? 'lttb' : undefined,
             markLine: markLines.length > 0 ? {
               silent: true,
@@ -1395,6 +1475,7 @@
             yAxisIndex: 1,
             symbol: 'none',
             lineStyle: { width: 1.5 },
+            itemStyle: { color: '#5470c6' },
             sampling: rows.length > SAMPLING_THRESHOLD ? 'lttb' : undefined,
           },
         ],
@@ -1403,7 +1484,7 @@
           {
             type: 'slider',
             xAxisIndex: 0,
-            bottom: '46%',
+            bottom: layout.spectrumSliderBottom + '%',
             borderColor: tc.splitLine,
             fillerColor: isDark ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.1)',
             handleStyle: { color: tc.axisLine },
@@ -1419,7 +1500,7 @@
             xAxisIndex: 1,
             start: zoomStart,
             end: zoomEnd,
-            bottom: '1%',
+            bottom: layout.timeSliderBottom + '%',
             borderColor: tc.splitLine,
             fillerColor: isDark ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.1)',
             handleStyle: { color: tc.axisLine },
@@ -1552,5 +1633,6 @@
       }
 
       renderFftMeasurements();
+      updateFftSplitter();
       return option;
     }

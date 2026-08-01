@@ -462,6 +462,23 @@
     }
     .fft-mstat b { font-weight: 500; opacity: 0.6; }
     .fft-mstat i { font-style: normal; font-weight: 600; color: var(--text-h); }
+    .fft-splitter {
+      position: absolute; left: 0; right: 0;
+      height: 10px;
+      cursor: row-resize;
+      z-index: 5;
+      background: transparent;
+    }
+    .fft-splitter::before {
+      content: '';
+      display: block;
+      height: 3px;
+      margin-top: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      transition: background 0.15s;
+    }
+    .fft-splitter:hover::before { background: var(--accent); }
 
     /* Drag overlay */
     .drag-overlay {
