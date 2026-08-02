@@ -5,7 +5,7 @@
 A browser-based lightweight data visualization tool supporting CSV and Excel file imports. Automatically generates **time-series charts**, **XY scatter plots**, **XYZ 3D scatter plots**, and **FFT spectrum analysis**. Zero build steps, zero runtime dependencies — open and go.
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-v1.2.2-blue)
+![Version](https://img.shields.io/badge/version-v1.2.3-blue)
 
 ---
 
@@ -32,7 +32,7 @@ A browser-based lightweight data visualization tool supporting CSV and Excel fil
 | **XYZ 3D** | Three-variable 3D scatter (requires echarts-gl) | 3 |
 | **FFT Spectrum** | FFT frequency-domain analysis with harmonic markers | 1 |
 
-### FFT Spectrum Analysis (v1.2.2)
+### FFT Spectrum Analysis (v1.2.3)
 - Real-time FFT of selected time range via dataZoom slider
 - **7 window functions**: Rect / Hann / Hamming / Blackman / Blackman-Harris / Flat-top / Kaiser, with automatic coherent-gain compensation
 - **Spectrum averaging**: Single / Linear / Exponential / Peak-Hold (Max-Hold), 50% overlapping segments

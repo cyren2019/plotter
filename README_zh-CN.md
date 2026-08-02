@@ -5,7 +5,7 @@
 一个基于浏览器的轻量级数据可视化工具，支持 CSV 与 Excel 文件导入，自动生成**时序图**、**XY 散点图**、**XYZ 3D 散点图**与 **FFT 频谱分析**。零构建、零依赖运行时，打开即用。
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-v1.2.2-blue)
+![Version](https://img.shields.io/badge/version-v1.2.3-blue)
 
 ---
 
@@ -32,7 +32,7 @@
 | **XYZ 3D 图** | 三变量三维散点（需 echarts-gl） | 3 |
 | **FFT 频谱** | FFT 频域分析，含谐波标记 | 1 |
 
-### FFT 频谱分析 (v1.2.2)
+### FFT 频谱分析 (v1.2.3)
 - 通过 dataZoom 滑块实时 FFT 所选时间范围
 - **7 种窗函数**：矩形 / Hann / Hamming / Blackman / Blackman-Harris / 平顶 / Kaiser，自动相干增益补偿
 - **频谱平均化**：单次 / 线性平均 / 指数平均 / 峰值保持（Max-Hold），50% 重叠分段
