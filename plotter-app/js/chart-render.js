@@ -1182,15 +1182,9 @@
       return t('fft_physical');
     }
 
-    // Bar width = 80% of one frequency bin, in the display unit. Computed from the
-    // Hz bin resolution so the rendered pixel width stays identical across frequency
-    // units (switching between units must not change the bar thickness).
-    function getFftBarWidth(binResolutionHz, freqUnit) {
-      const factor = getFreqUnitFactor(freqUnit);
-      // Clamp the Hz-equivalent width so thin bars stay visible (unit-invariant)
-      const hzWidth = Math.max(binResolutionHz * 0.8, 0.2);
-      return hzWidth * factor;
-    }
+    // Bar width as a percentage of the data interval (one frequency bin) — resolves
+    // unit-invariantly on a value axis, so bars look identical across freq units.
+    const FFT_BAR_WIDTH = '80%';
 
     let fftMeasurements = null; // latest auto-measurement results (drives the measurement strip)
 
@@ -1427,7 +1421,7 @@
             data: freqData.map((f, i) => [f, magData[i]]),
             xAxisIndex: 0,
             yAxisIndex: 0,
-            barWidth: getFftBarWidth(fftResult.binResolution, fftFreqUnit),
+            barWidth: FFT_BAR_WIDTH,
             itemStyle: { color: '#5470c6' }, // match time-series mode palette[0]
             sampling: freqData.length > SAMPLING_THRESHOLD ? 'lttb' : undefined,
             markLine: markLines.length > 0 ? {
