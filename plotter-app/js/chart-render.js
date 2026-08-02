@@ -332,10 +332,12 @@
           <div class="fft-panel-row">
             <label class="fft-label">
               <span>${t('fft_freq_unit')}</span>
-              <div class="fft-segmented">
-                <button class="fft-seg-btn ${fftFreqUnit === 'Hz' ? 'active' : ''}" data-fft-param="freqUnit" data-value="Hz">Hz</button>
-                <button class="fft-seg-btn ${fftFreqUnit === 'rad/s' ? 'active' : ''}" data-fft-param="freqUnit" data-value="rad/s">rad/s</button>
-              </div>
+              <select class="fft-select" id="fftFreqUnitSelect">
+                <option value="Hz" ${fftFreqUnit === 'Hz' ? 'selected' : ''}>Hz</option>
+                <option value="rad/s" ${fftFreqUnit === 'rad/s' ? 'selected' : ''}>rad/s</option>
+                <option value="deg/s" ${fftFreqUnit === 'deg/s' ? 'selected' : ''}>deg/s</option>
+                <option value="rpm" ${fftFreqUnit === 'rpm' ? 'selected' : ''}>rpm</option>
+              </select>
             </label>
             <label class="fft-label">
               <span>${t('fft_y_axis')}</span>
@@ -479,8 +481,7 @@
       if (fftPanel) {
         // Segmented button groups
         const applyFftParam = (param, value) => {
-          if (param === 'freqUnit') fftFreqUnit = value;
-          else if (param === 'yAxis') fftYAxis = value;
+          if (param === 'yAxis') fftYAxis = value;
           else if (param === 'xAxis') fftXAxis = value;
           else if (param === 'averaging') fftAveraging = value;
           else if (param === 'ampUnit') fftAmpUnit = value;
@@ -504,6 +505,14 @@
           });
         }
 
+        // Frequency unit dropdown
+        const fftFreqUnitSelect = fftPanel.querySelector('#fftFreqUnitSelect');
+        if (fftFreqUnitSelect) {
+          fftFreqUnitSelect.addEventListener('change', () => {
+            fftFreqUnit = fftFreqUnitSelect.value;
+          });
+        }
+
         // Apply button — triggers FFT recompute with current params
         const fftApplyBtn = fftPanel.querySelector('#fftApplyBtn');
         if (fftApplyBtn) {
@@ -514,6 +523,8 @@
             });
             const winSelect = fftPanel.querySelector('#fftWindowSelect');
             if (winSelect && FFT_WINDOWS[winSelect.value]) fftWindow = winSelect.value;
+            const freqUnitSelect = fftPanel.querySelector('#fftFreqUnitSelect');
+            if (freqUnitSelect) fftFreqUnit = freqUnitSelect.value;
             // Re-render chart with new params
             saveZoomState();
             renderChart();
@@ -1173,9 +1184,9 @@
 
     // Bar width = 80% of one frequency bin, in the display unit. Computed from the
     // Hz bin resolution so the rendered pixel width stays identical across frequency
-    // units (switching Hz ↔ rad/s must not change the bar thickness).
+    // units (switching between units must not change the bar thickness).
     function getFftBarWidth(binResolutionHz, freqUnit) {
-      const factor = freqUnit === 'rad/s' ? 2 * Math.PI : 1;
+      const factor = getFreqUnitFactor(freqUnit);
       // Clamp the Hz-equivalent width so thin bars stay visible (unit-invariant)
       const hzWidth = Math.max(binResolutionHz * 0.8, 0.2);
       return hzWidth * factor;
@@ -1194,7 +1205,7 @@
       box.style.display = 'flex';
       const m = fftMeasurements;
       const f0 = m.fundamental.freq;
-      const f0Label = fftFreqUnit === 'rad/s' ? (f0 * 2 * Math.PI).toFixed(2) + ' rad/s' : f0.toFixed(2) + ' Hz';
+      const f0Label = (f0 * getFreqUnitFactor(fftFreqUnit)).toFixed(2) + ' ' + fftFreqUnit;
       const fmtDb = (v) => (v === Infinity || v === -Infinity) ? '∞' : (Number.isFinite(v) ? v.toFixed(1) + ' dB' : '-');
       set('mF0', f0Label);
       set('mTHD', m.thd.pct.toFixed(2) + '%');
@@ -1307,7 +1318,7 @@
         for (let h = 1; h <= 20; h++) {
           const harmonicFreq = h * f0;
           if (harmonicFreq > nyquistLimit * 0.99) break;
-          const displayFreq = fftFreqUnit === 'rad/s' ? harmonicFreq * 2 * Math.PI : harmonicFreq;
+          const displayFreq = harmonicFreq * getFreqUnitFactor(fftFreqUnit);
           markLines.push({
             xAxis: displayFreq,
             lineStyle: { type: 'dashed', color: h === 1 ? 'rgba(239,68,68,0.5)' : 'rgba(156,163,175,0.25)', width: h === 1 ? 1.5 : 0.5 },

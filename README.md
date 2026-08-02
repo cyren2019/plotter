@@ -41,7 +41,7 @@ A browser-based lightweight data visualization tool supporting CSV and Excel fil
 - Fundamental frequency auto-detection using harmonic support scoring (handles missing harmonics, e.g. square waves)
 - Harmonic marker lines at f₀, 2f₀, 3f₀, …
 - Multiple Y-axis modes: Physical (absolute), Per-Unit (normalized), dB (logarithmic), dBc (relative to fundamental)
-- Configurable frequency units: Hz, rad/s, deg/s
+- Configurable frequency units: Hz, rad/s, deg/s, rpm
 - Manual sample rate override for non-timestamp data
 - Automatic or manual fundamental frequency setting
 
