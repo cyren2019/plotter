@@ -767,8 +767,89 @@
       return BIT_COLORS[bit % BIT_COLORS.length];
     }
 
+    // Classify the time axis: 'time' (Date values), 'value' (numeric), or 'category' (fallback).
+    function classifyTimeAxis(rows, timeColumn) {
+      const n = Math.min(rows.length, 200);
+      let sawDate = false, sawNumber = false, sawOther = false;
+      for (let i = 0; i < n; i++) {
+        const v = rows[i]?.[timeColumn];
+        if (v == null || v === '') continue;
+        if (v instanceof Date) sawDate = true;
+        else if (Number.isFinite(Number(v))) sawNumber = true;
+        else sawOther = true;
+      }
+      if (sawDate) return 'time';
+      if (sawNumber && !sawOther) return 'value';
+      return 'category';
+    }
+
+    // Build the shared time-axis descriptor: type, per-row x values, and numeric domain.
+    function buildTimeAxis(rows, timeColumn) {
+      const type = classifyTimeAxis(rows, timeColumn);
+      const values = rows.map(row => (row[timeColumn] != null ? row[timeColumn] : null));
+      let min, max;
+      if (type !== 'category') {
+        let lo = Infinity, hi = -Infinity;
+        for (const v of values) {
+          if (v == null) continue;
+          const t = v instanceof Date ? v.getTime() : Number(v);
+          if (!Number.isFinite(t)) continue;
+          if (t < lo) lo = t;
+          if (t > hi) hi = t;
+        }
+        if (Number.isFinite(lo) && Number.isFinite(hi)) {
+          if (lo === hi) {
+            const pad = lo === 0 ? 1 : (Math.abs(lo) * 0.05 || 1);
+            min = lo - pad;
+            max = hi + pad;
+          } else {
+            min = lo;
+            max = hi;
+          }
+        }
+      }
+      return { type, values, min, max };
+    }
+
+    // Series data as [x, y] pairs for a time/value axis, or flat y-values for a category axis.
+    function timeSeriesData(rows, variable, timeState) {
+      if (timeState.type === 'category') {
+        return rows.map(row => {
+          const val = row[variable];
+          if (val === null || val === undefined || isNaN(Number(val)) || !isFinite(Number(val))) return null;
+          return Number(val);
+        });
+      }
+      return rows.map((row, i) => {
+        const val = row[variable];
+        if (val === null || val === undefined || isNaN(Number(val)) || !isFinite(Number(val))) return null;
+        const x = timeState.values[i];
+        if (x == null) return null;
+        return [x, Number(val)];
+      });
+    }
+
+    // Bit series data as [x, y] pairs, or flat y-values for a category axis.
+    function bitTimeSeriesData(rows, variable, bitRow, timeState) {
+      if (timeState.type === 'category') {
+        return rows.map(row => {
+          const val = Number(row[variable]);
+          if (val === null || val === undefined || isNaN(val) || !isFinite(val)) return null;
+          return (val >> bitRow) & 1;
+        });
+      }
+      return rows.map((row, i) => {
+        const val = Number(row[variable]);
+        if (val === null || val === undefined || isNaN(val) || !isFinite(val)) return null;
+        const x = timeState.values[i];
+        if (x == null) return null;
+        return [x, (val >> bitRow) & 1];
+      });
+    }
+
     function buildTimeSeriesOption() {
       const { rows, timeColumn } = data;
+      const timeState = buildTimeAxis(rows, timeColumn);
       const timeLabels = rows.map(row => {
         const val = row[timeColumn];
         if (val instanceof Date) return dayjs(val).format('YYYY-MM-DD HH:mm:ss');
@@ -794,11 +875,7 @@
         const series = varsToPlot.map(variable => ({
           name: variable,
           type: 'line',
-          data: rows.map(row => {
-            const val = row[variable];
-            if (val === null || val === undefined) return null;
-            return Number(val);
-          }),
+          data: timeSeriesData(rows, variable, timeState),
           symbol: 'none',
           sampling: rows.length > SAMPLING_THRESHOLD ? 'lttb' : undefined,
         }));
@@ -809,7 +886,7 @@
             trigger: 'axis',
             formatter: (params) => {
               const title = formatTooltipTime(params[0]?.dataIndex);
-              return title + '<br/>' + params.map(p => p.marker + ' ' + p.seriesName + ': ' + (p.value ?? '-')).join('<br/>');
+              return title + '<br/>' + params.map(p => p.marker + ' ' + p.seriesName + ': ' + ((Array.isArray(p.value) ? p.value[1] : p.value) ?? '-')).join('<br/>');
             },
           },
           legend: { type: 'scroll', bottom: 0, textStyle: { fontSize: 12, color: tc.text } },
@@ -819,8 +896,11 @@
             top: '3%', containLabel: true,
           },
           xAxis: {
-            type: 'category', data: timeLabels,
-            axisLabel: { rotate: timeLabels.length > 20 ? 45 : 0, fontSize: 11, color: tc.text },
+            type: timeState.type,
+            ...(timeState.type === 'category' ? { data: timeLabels } : { min: timeState.min, max: timeState.max }),
+            axisLabel: timeState.type === 'category'
+              ? { rotate: timeLabels.length > 20 ? 45 : 0, fontSize: 11, color: tc.text }
+              : { fontSize: 11, color: tc.text },
             axisLine: { lineStyle: { color: tc.axisLine } },
           },
           yAxis: {
@@ -891,8 +971,8 @@
             });
 
             xAxes.push({
-              type: 'category',
-              data: timeLabels,
+              type: timeState.type,
+              ...(timeState.type === 'category' ? { data: timeLabels } : { min: timeState.min, max: timeState.max }),
               gridIndex: rowIndex,
               axisLine: { show: false },
               axisTick: { show: false },
@@ -931,11 +1011,7 @@
             series.push({
               name: `${variable} · bit${bitRow}`,
               type: 'line',
-              data: rows.map(row => {
-                const val = Number(row[variable]);
-                if (val === null || val === undefined || isNaN(val) || !isFinite(val)) return null;
-                return (val >> bitRow) & 1;
-              }),
+              data: bitTimeSeriesData(rows, variable, bitRow, timeState),
               symbol: 'none',
               lineStyle: { width: 1.5 },
               xAxisIndex: rowIndex,
@@ -981,8 +1057,8 @@
           });
 
           xAxes.push({
-            type: 'category',
-            data: timeLabels,
+            type: timeState.type,
+            ...(timeState.type === 'category' ? { data: timeLabels } : { min: timeState.min, max: timeState.max }),
             gridIndex: rowIndex,
             axisLine: { show: false },
             axisTick: { show: false },
@@ -1025,11 +1101,7 @@
           series.push({
             name: variable,
             type: 'line',
-            data: rows.map(row => {
-              const val = row[variable];
-              if (val === null || val === undefined || isNaN(Number(val)) || !isFinite(Number(val))) return null;
-              return Number(val);
-            }),
+            data: timeSeriesData(rows, variable, timeState),
             symbol: 'none',
             xAxisIndex: rowIndex,
             yAxisIndex: rowIndex,
@@ -1092,7 +1164,7 @@
               }
               return lines;
             }
-            return title + '<br/>' + params.map(p => p.marker + ' ' + p.seriesName + ': ' + (p.value ?? '-')).join('<br/>');
+            return title + '<br/>' + params.map(p => p.marker + ' ' + p.seriesName + ': ' + ((Array.isArray(p.value) ? p.value[1] : p.value) ?? '-')).join('<br/>');
           },
         },
         graphic: graphics,
@@ -1324,18 +1396,14 @@
         magData = Array.from(magnitudes);
       }
 
-      // Time labels for preview
+      // Time axis for the preview (true time/value spacing when possible)
+      const previewTimeState = buildTimeAxis(rows, timeColumn);
+
+      // Time labels for preview (used when the time column is not time/numeric)
       const timeLabels = rows.map(row => {
         const val = row[timeColumn];
         if (val instanceof Date) return dayjs(val).format('YYYY-MM-DD HH:mm:ss');
         return String(val ?? '');
-      });
-
-      // Time-series data for preview
-      const tsData = rows.map(row => {
-        const val = row[varName];
-        if (val === null || val === undefined) return null;
-        return Number(val);
       });
 
       const freqUnitLabel = fftFreqUnit;
@@ -1385,8 +1453,8 @@
             min: fftXAxis === 'log' ? Math.max(freqData[1] || 0.001, 0.001) : 0,
           },
           {
-            type: 'category',
-            data: timeLabels,
+            type: previewTimeState.type,
+            ...(previewTimeState.type === 'category' ? { data: timeLabels } : { min: previewTimeState.min, max: previewTimeState.max }),
             axisLabel: { show: false },
             axisLine: { lineStyle: { color: tc.axisLine } },
             gridIndex: 1,
@@ -1433,7 +1501,7 @@
           {
             name: varName,
             type: 'line',
-            data: tsData,
+            data: timeSeriesData(rows, varName, previewTimeState),
             xAxisIndex: 1,
             yAxisIndex: 1,
             symbol: 'none',

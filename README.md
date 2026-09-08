@@ -5,7 +5,7 @@
 A browser-based lightweight data visualization tool supporting CSV and Excel file imports. Automatically generates **time-series charts**, **XY scatter plots**, **XYZ 3D scatter plots**, and **FFT spectrum analysis**. Zero build steps, zero runtime dependencies — open and go.
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-v1.2.3-blue)
+![Version](https://img.shields.io/badge/version-v1.2.4-blue)
 
 ---
 

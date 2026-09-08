@@ -5,7 +5,7 @@
 一个基于浏览器的轻量级数据可视化工具，支持 CSV 与 Excel 文件导入，自动生成**时序图**、**XY 散点图**、**XYZ 3D 散点图**与 **FFT 频谱分析**。零构建、零依赖运行时，打开即用。
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-v1.2.3-blue)
+![Version](https://img.shields.io/badge/version-v1.2.4-blue)
 
 ---
 
