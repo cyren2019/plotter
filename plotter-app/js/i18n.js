@@ -5,8 +5,6 @@
     const I18N = {
       zh: {
         import: '选择文件',
-        theme_light: '明亮',
-        theme_dark: '黑暗',
         theme_toggle_title: '切换主题',
         drop_hint: '释放文件以导入',
         empty_title: '拖放或点击导入数据文件',
@@ -69,15 +67,11 @@
         meas_f0: 'f₀',
         meas_noise: '噪底',
         msg_fft_need: 'FFT模式需要选择1个变量',
-        msg_fft_no_data: '所选范围内有效数据不足，无法进行FFT分析',
         mode_fft: 'FFT 频谱分析',
-        lang_label: 'EN',
         lang_title: 'Switch to English',
       },
       en: {
         import: 'Select File',
-        theme_light: 'Light',
-        theme_dark: 'Dark',
         theme_toggle_title: 'Toggle Theme',
         drop_hint: 'Drop file to import',
         empty_title: 'Drag & drop or click to import data',
@@ -140,9 +134,7 @@
         meas_f0: 'f₀',
         meas_noise: 'Noise Floor',
         msg_fft_need: 'FFT mode requires 1 variable selected',
-        msg_fft_no_data: 'Not enough valid data in range for FFT analysis',
         mode_fft: 'FFT Spectrum',
-        lang_label: 'CN',
         lang_title: '切换到中文',
       }
     };

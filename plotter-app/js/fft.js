@@ -176,16 +176,34 @@
       return result;
     }
 
-    function computeFFT(rows, varName, startIdx, endIdx, sampleRate, windowName) {
-      // Extract non-null values from the selected range
-      const rawValues = [];
+    // Collect the finite numeric samples of a variable within [startIdx, endIdx).
+    function extractFiniteValues(rows, varName, startIdx, endIdx) {
+      const values = [];
       for (let i = startIdx; i < endIdx && i < rows.length; i++) {
         const val = rows[i][varName];
         if (val !== null && val !== undefined && Number.isFinite(Number(val))) {
-          rawValues.push(Number(val));
+          values.push(Number(val));
         }
       }
+      return values;
+    }
 
+    // Coherent gain of a window: mean of its samples.
+    function windowCoherentGain(window, length) {
+      let sum = 0;
+      for (let i = 0; i < length; i++) sum += window[i];
+      return sum / length;
+    }
+
+    // Frequency axis for rfft output: f[i] = i * sampleRate / fftSize.
+    function buildFreqAxis(numBins, sampleRate, fftSize) {
+      const freqs = new Float64Array(numBins);
+      for (let i = 0; i < numBins; i++) freqs[i] = i * (sampleRate / fftSize);
+      return freqs;
+    }
+
+    function computeFFT(rows, varName, startIdx, endIdx, sampleRate, windowName) {
+      const rawValues = extractFiniteValues(rows, varName, startIdx, endIdx);
       if (rawValues.length < 2) return null;
 
       // Determine FFT size: next power of 2
@@ -194,9 +212,7 @@
       const window = win.create(rawValues.length);
 
       // Compute coherent gain for amplitude compensation
-      let windowSum = 0;
-      for (let i = 0; i < rawValues.length; i++) windowSum += window[i];
-      const coherentGain = windowSum / rawValues.length;
+      const coherentGain = windowCoherentGain(window, rawValues.length);
 
       const padded = new Float64Array(fftSize);
       for (let i = 0; i < rawValues.length; i++) {
@@ -214,10 +230,7 @@
 
       // Build correct frequency axis: f[i] = i * sampleRate / fftSize
       const binResolution = sampleRate / fftSize;
-      const freqs = new Float64Array(numBins);
-      for (let i = 0; i < numBins; i++) {
-        freqs[i] = i * binResolution;
-      }
+      const freqs = buildFreqAxis(numBins, sampleRate, fftSize);
 
       return {
         magnitudes: magnitudes,
@@ -237,13 +250,7 @@
     //  - 'exp'    : exponentially-weighted moving average (alpha = 0.3), weights recent segments
     //  - 'peak'   : max-hold — element-wise maximum across segments (captures transients/spurs)
     function computeAveragedFFT(rows, varName, startIdx, endIdx, sampleRate, windowName, averaging) {
-      const rawValues = [];
-      for (let i = startIdx; i < endIdx && i < rows.length; i++) {
-        const val = rows[i][varName];
-        if (val !== null && val !== undefined && Number.isFinite(Number(val))) {
-          rawValues.push(Number(val));
-        }
-      }
+      const rawValues = extractFiniteValues(rows, varName, startIdx, endIdx);
       const total = rawValues.length;
       if (total < 2) return null;
 
@@ -265,14 +272,11 @@
 
       const win = getWindow(windowName || 'hann');
       const window = win.create(segLen);
-      let windowSum = 0;
-      for (let i = 0; i < segLen; i++) windowSum += window[i];
-      const coherentGain = windowSum / segLen;
+      const coherentGain = windowCoherentGain(window, segLen);
 
       const fftSize = nextPowerOf2(segLen);
       const numBins = fftSize / 2 + 1; // rfft positive-frequency bins
-      const freqs = new Float64Array(numBins);
-      for (let i = 0; i < numBins; i++) freqs[i] = i * (sampleRate / fftSize);
+      const freqs = buildFreqAxis(numBins, sampleRate, fftSize);
 
       const spectrumOf = (off) => {
         const padded = new Float64Array(fftSize);

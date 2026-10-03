@@ -24,6 +24,15 @@
       'YYYY-MM-DDTHHmmss', 'YYYY-MM-DDTHHmm',
     ];
 
+    // Try every known time format in order; `strict` requires an exact format match.
+    function matchFormats(value, strict) {
+      for (const fmt of TIME_FORMATS) {
+        const parsed = dayjs(value, fmt, strict);
+        if (parsed.isValid()) return parsed.toDate();
+      }
+      return null;
+    }
+
     function parseTime(value) {
       if (typeof value === 'number') {
         if (!Number.isFinite(value) || value <= 0) return null;
@@ -53,15 +62,7 @@
 
       const native = dayjs(trimmed);
       if (native.isValid()) return native.toDate();
-      for (const fmt of TIME_FORMATS) {
-        const p = dayjs(trimmed, fmt, true);
-        if (p.isValid()) return p.toDate();
-      }
-      for (const fmt of TIME_FORMATS) {
-        const p = dayjs(trimmed, fmt, false);
-        if (p.isValid()) return p.toDate();
-      }
-      return null;
+      return matchFormats(trimmed, true) || matchFormats(trimmed, false);
     }
 
     function isTimeString(value) {

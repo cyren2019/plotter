@@ -4,13 +4,60 @@
     function escapeHtml(str) {
       return String(str).replace(/[&<>"']/g, s => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
     }
+
+    // ===================== Shared Chart Option Helpers =====================
+
+    // True when a dataZoom item targets the given x-axis index.
+    function hasAxisIndex(dzItem, index) {
+      return dzItem.xAxisIndex === index ||
+        (Array.isArray(dzItem.xAxisIndex) && dzItem.xAxisIndex.includes(index));
+    }
+
+    // A numeric value that is neither null/undefined nor NaN/Infinity.
+    function isFiniteNumber(value) {
+      return value !== null && value !== undefined && !isNaN(Number(value)) && isFinite(Number(value));
+    }
+
+    // A value that is neither null nor undefined.
+    function isPresent(value) {
+      return value !== null && value !== undefined;
+    }
+
+    // Tooltip line for a single axis-trigger series param.
+    function seriesTooltipLine(p) {
+      return p.marker + ' ' + p.seriesName + ': ' + ((Array.isArray(p.value) ? p.value[1] : p.value) ?? '-');
+    }
+
+    // Chart background: theme color in dark mode, transparent in light mode.
+    function chartBackground(tc) {
+      return isDark ? tc.bg : 'transparent';
+    }
+
+    // Shared styling for named value axes.
+    function axisTextStyle(tc) {
+      return { nameTextStyle: { fontSize: 11, color: tc.text }, axisLabel: { color: tc.text } };
+    }
+    function valueAxisStyle(tc) {
+      return { ...axisTextStyle(tc), splitLine: { lineStyle: { color: tc.splitLine } } };
+    }
+
+    // Shared styling for dataZoom sliders.
+    function zoomSliderStyle(tc) {
+      return {
+        borderColor: tc.splitLine,
+        fillerColor: isDark ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.1)',
+        handleStyle: { color: tc.axisLine },
+        textStyle: { color: tc.text },
+      };
+    }
+
     // Find the TIME-axis dataZoom (xAxisIndex 1) in an ECharts option — the slider
     // carries the current time-window selection. Spectrum zooms (xAxisIndex 0) are
     // visual only and must never be mistaken for the time window.
     function getTimeDataZoom(opt) {
       if (!opt || !opt.dataZoom) return null;
-      const isTimeAxis = (d) => (d.xAxisIndex === 1) || (Array.isArray(d.xAxisIndex) && d.xAxisIndex.includes(1));
-      return opt.dataZoom.find(d => isTimeAxis(d) && d.type === 'slider') || opt.dataZoom.find(isTimeAxis) || null;
+      return opt.dataZoom.find(d => hasAxisIndex(d, 1) && d.type === 'slider') ||
+        opt.dataZoom.find(d => hasAxisIndex(d, 1)) || null;
     }
     function saveZoomState() {
       if (chartInstance && !restoreZoom) {
@@ -767,6 +814,51 @@
       return BIT_COLORS[bit % BIT_COLORS.length];
     }
 
+    // Fixed margins for strict subplot alignment in separate mode.
+    const SUBPLOT_GRID_LEFT = 60;
+    const SUBPLOT_GRID_RIGHT = 30;
+
+    // --- Separate-mode subplot building blocks ---
+    function subplotGrid(top, height, tc) {
+      return {
+        top: top,
+        left: SUBPLOT_GRID_LEFT,
+        right: SUBPLOT_GRID_RIGHT,
+        height: height,
+        containLabel: false,
+        show: true,
+        borderColor: tc.gridBorder,
+        borderWidth: 1,
+        backgroundColor: tc.gridBg,
+      };
+    }
+
+    function subplotXAxis(rowIndex, timeState, timeLabels) {
+      return {
+        type: timeState.type,
+        ...(timeState.type === 'category' ? { data: timeLabels } : { min: timeState.min, max: timeState.max }),
+        gridIndex: rowIndex,
+        axisLine: { show: false },
+        axisTick: { show: false },
+        axisLabel: { show: false },
+        axisPointer: { show: true, type: 'line', lineStyle: { color: '#4f46e5', width: 2 } },
+        position: 'bottom',
+      };
+    }
+
+    function varLabelGraphic(text, top, tc) {
+      return {
+        type: 'text',
+        left: 'center',
+        top: top,
+        style: {
+          text: text,
+          fill: tc.subplotLabel,
+          font: 'bold 12px sans-serif',
+        },
+      };
+    }
+
     // Classify the time axis: 'time' (Date values), 'value' (numeric), or 'category' (fallback).
     function classifyTimeAxis(rows, timeColumn) {
       const n = Math.min(rows.length, 200);
@@ -816,13 +908,13 @@
       if (timeState.type === 'category') {
         return rows.map(row => {
           const val = row[variable];
-          if (val === null || val === undefined || isNaN(Number(val)) || !isFinite(Number(val))) return null;
+          if (!isFiniteNumber(val)) return null;
           return Number(val);
         });
       }
       return rows.map((row, i) => {
         const val = row[variable];
-        if (val === null || val === undefined || isNaN(Number(val)) || !isFinite(Number(val))) return null;
+        if (!isFiniteNumber(val)) return null;
         const x = timeState.values[i];
         if (x == null) return null;
         return [x, Number(val)];
@@ -834,13 +926,13 @@
       if (timeState.type === 'category') {
         return rows.map(row => {
           const val = Number(row[variable]);
-          if (val === null || val === undefined || isNaN(val) || !isFinite(val)) return null;
+          if (!isFiniteNumber(val)) return null;
           return (val >> bitRow) & 1;
         });
       }
       return rows.map((row, i) => {
         const val = Number(row[variable]);
-        if (val === null || val === undefined || isNaN(val) || !isFinite(val)) return null;
+        if (!isFiniteNumber(val)) return null;
         const x = timeState.values[i];
         if (x == null) return null;
         return [x, (val >> bitRow) & 1];
@@ -881,12 +973,12 @@
         }));
 
         return {
-          backgroundColor: isDark ? tc.bg : 'transparent',
+          backgroundColor: chartBackground(tc),
           tooltip: {
             trigger: 'axis',
             formatter: (params) => {
               const title = formatTooltipTime(params[0]?.dataIndex);
-              return title + '<br/>' + params.map(p => p.marker + ' ' + p.seriesName + ': ' + ((Array.isArray(p.value) ? p.value[1] : p.value) ?? '-')).join('<br/>');
+              return title + '<br/>' + params.map(seriesTooltipLine).join('<br/>');
             },
           },
           legend: { type: 'scroll', bottom: 0, textStyle: { fontSize: 12, color: tc.text } },
@@ -906,13 +998,11 @@
           yAxis: {
             type: 'value',
             name: varsToPlot.length === 1 ? varsToPlot[0] : '',
-            nameTextStyle: { fontSize: 11, color: tc.text },
-            axisLabel: { color: tc.text },
-            splitLine: { lineStyle: { color: tc.splitLine } },
+            ...valueAxisStyle(tc),
           },
           series,
           dataZoom: [
-            { type: 'slider', start: zoomStart, end: zoomEnd, bottom: varsToPlot.length > 5 ? '8%' : '4%', borderColor: tc.splitLine, fillerColor: isDark ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.1)', handleStyle: { color: tc.axisLine }, textStyle: { color: tc.text } },
+            { type: 'slider', start: zoomStart, end: zoomEnd, bottom: varsToPlot.length > 5 ? '8%' : '4%', ...zoomSliderStyle(tc) },
             { type: 'inside', start: zoomStart, end: zoomEnd },
           ],
         };
@@ -944,10 +1034,6 @@
 
       const tc = getThemeColors();
 
-      // Fixed left margin for strict alignment across all subplots
-      const gridLeft = 60;
-      const gridRight = 30;
-
       let rowIndex = 0;
       let cumulativeTop = topPad;
 
@@ -958,28 +1044,9 @@
           for (let bitRow = bitCount - 1; bitRow >= 0; bitRow--) {
             const gridTop = cumulativeTop;
 
-            grids.push({
-              top: gridTop,
-              left: gridLeft,
-              right: gridRight,
-              height: rowHeightBit,
-              containLabel: false,
-              show: true,
-              borderColor: tc.gridBorder,
-              borderWidth: 1,
-              backgroundColor: tc.gridBg,
-            });
+            grids.push(subplotGrid(gridTop, rowHeightBit, tc));
 
-            xAxes.push({
-              type: timeState.type,
-              ...(timeState.type === 'category' ? { data: timeLabels } : { min: timeState.min, max: timeState.max }),
-              gridIndex: rowIndex,
-              axisLine: { show: false },
-              axisTick: { show: false },
-              axisLabel: { show: false },
-              axisPointer: { show: true, type: 'line', lineStyle: { color: '#4f46e5', width: 2 } },
-              position: 'bottom',
-            });
+            xAxes.push(subplotXAxis(rowIndex, timeState, timeLabels));
 
             yAxes.push({
               type: 'value',
@@ -1025,16 +1092,7 @@
           }
 
           // Variable name label below the bit block (same as decimal)
-          graphics.push({
-            type: 'text',
-            left: 'center',
-            top: cumulativeTop + 4,
-            style: {
-              text: variable,
-              fill: tc.subplotLabel,
-              font: 'bold 12px sans-serif',
-            },
-          });
+          graphics.push(varLabelGraphic(variable, cumulativeTop + 4, tc));
 
           // Gap between variable blocks (not after the last one)
           if (varIdx < varLayout.length - 1) {
@@ -1044,28 +1102,9 @@
           // Decimal: existing logic
           const gridTop = cumulativeTop;
 
-          grids.push({
-            top: gridTop,
-            left: gridLeft,
-            right: gridRight,
-            height: rowHeight,
-            containLabel: false,
-            show: true,
-            borderColor: tc.gridBorder,
-            borderWidth: 1,
-            backgroundColor: tc.gridBg,
-          });
+          grids.push(subplotGrid(gridTop, rowHeight, tc));
 
-          xAxes.push({
-            type: timeState.type,
-            ...(timeState.type === 'category' ? { data: timeLabels } : { min: timeState.min, max: timeState.max }),
-            gridIndex: rowIndex,
-            axisLine: { show: false },
-            axisTick: { show: false },
-            axisLabel: { show: false },
-            axisPointer: { show: true, type: 'line', lineStyle: { color: '#4f46e5', width: 2 } },
-            position: 'bottom',
-          });
+          xAxes.push(subplotXAxis(rowIndex, timeState, timeLabels));
 
           const yAxisConfig = {
             type: 'value',
@@ -1110,16 +1149,7 @@
           });
 
           // Variable name label below
-          graphics.push({
-            type: 'text',
-            left: 'center',
-            top: gridTop + rowHeight + 4,
-            style: {
-              text: variable,
-              fill: tc.subplotLabel,
-              font: 'bold 12px sans-serif',
-            },
-          });
+          graphics.push(varLabelGraphic(variable, gridTop + rowHeight + 4, tc));
 
           cumulativeTop += rowHeight;
           rowIndex++;
@@ -1164,7 +1194,7 @@
               }
               return lines;
             }
-            return title + '<br/>' + params.map(p => p.marker + ' ' + p.seriesName + ': ' + ((Array.isArray(p.value) ? p.value[1] : p.value) ?? '-')).join('<br/>');
+            return title + '<br/>' + params.map(seriesTooltipLine).join('<br/>');
           },
         },
         graphic: graphics,
@@ -1191,21 +1221,21 @@
         .map(row => {
           const x = row[xVar];
           const y = row[yVar];
-          if (x === null || x === undefined || y === null || y === undefined) return null;
+          if (!isPresent(x) || !isPresent(y)) return null;
           return [Number(x), Number(y)];
         })
         .filter(d => d !== null);
 
       const tc = getThemeColors();
       return {
-        backgroundColor: isDark ? tc.bg : 'transparent',
+        backgroundColor: chartBackground(tc),
         tooltip: {
           trigger: 'item',
           formatter: (params) => `${xVar}: ${params.data[0]}<br/>${yVar}: ${params.data[1]}`,
         },
         grid: { left: '3%', right: '4%', bottom: '3%', top: '3%', containLabel: true },
-        xAxis: { type: 'value', name: xVar, nameLocation: 'center', nameGap: 25, nameTextStyle: { fontSize: 11, color: tc.text }, axisLabel: { color: tc.text }, splitLine: { lineStyle: { color: tc.splitLine } } },
-        yAxis: { type: 'value', name: yVar, nameLocation: 'center', nameGap: 30, nameRotate: 90, nameTextStyle: { fontSize: 11, color: tc.text }, axisLabel: { color: tc.text }, splitLine: { lineStyle: { color: tc.splitLine } } },
+        xAxis: { type: 'value', name: xVar, nameLocation: 'center', nameGap: 25, ...valueAxisStyle(tc) },
+        yAxis: { type: 'value', name: yVar, nameLocation: 'center', nameGap: 30, nameRotate: 90, ...valueAxisStyle(tc) },
         series: [{ type: 'scatter', data: scatterData, symbolSize: 4 }],
       };
     }
@@ -1219,20 +1249,20 @@
           const x = row[xVar];
           const y = row[yVar];
           const z = row[zVar];
-          if (x === null || x === undefined || y === null || y === undefined || z === null || z === undefined) return null;
+          if (!isPresent(x) || !isPresent(y) || !isPresent(z)) return null;
           return [Number(x), Number(y), Number(z)];
         })
         .filter(d => d !== null);
 
       const tc = getThemeColors();
       return {
-        backgroundColor: isDark ? tc.bg : 'transparent',
+        backgroundColor: chartBackground(tc),
         tooltip: {
           formatter: (params) => `${xVar}: ${params.data[0]}<br/>${yVar}: ${params.data[1]}<br/>${zVar}: ${params.data[2]}`,
         },
-        xAxis3D: { type: 'value', name: xVar, nameTextStyle: { fontSize: 11, color: tc.text }, axisLabel: { color: tc.text } },
-        yAxis3D: { type: 'value', name: yVar, nameTextStyle: { fontSize: 11, color: tc.text }, axisLabel: { color: tc.text } },
-        zAxis3D: { type: 'value', name: zVar, nameTextStyle: { fontSize: 11, color: tc.text }, axisLabel: { color: tc.text } },
+        xAxis3D: { type: 'value', name: xVar, ...axisTextStyle(tc) },
+        yAxis3D: { type: 'value', name: yVar, ...axisTextStyle(tc) },
+        zAxis3D: { type: 'value', name: zVar, ...axisTextStyle(tc) },
         grid3D: {
           boxWidth: 200, boxDepth: 80,
           viewControl: { autoRotate: false },
@@ -1292,8 +1322,7 @@
       if (chartInstance) {
         try {
           const prev = chartInstance.getOption();
-          const isSpec = (d) => (d.xAxisIndex === 0) || (Array.isArray(d.xAxisIndex) && d.xAxisIndex.includes(0));
-          const sdz = prev && prev.dataZoom ? prev.dataZoom.find(isSpec) : null;
+          const sdz = prev && prev.dataZoom ? prev.dataZoom.find(d => hasAxisIndex(d, 0)) : null;
           if (sdz) { specZoomStart = sdz.start || 0; specZoomEnd = sdz.end || 100; }
         } catch (e) { /* ignore */ }
       }
@@ -1409,7 +1438,7 @@
       const freqUnitLabel = fftFreqUnit;
 
       const option = {
-        backgroundColor: isDark ? tc.bg : 'transparent',
+        backgroundColor: chartBackground(tc),
         tooltip: {
           trigger: 'axis',
           axisPointer: { type: 'cross' },
@@ -1518,10 +1547,7 @@
             start: specZoomStart,
             end: specZoomEnd,
             bottom: 247,
-            borderColor: tc.splitLine,
-            fillerColor: isDark ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.1)',
-            handleStyle: { color: tc.axisLine },
-            textStyle: { color: tc.text },
+            ...zoomSliderStyle(tc),
           },
           {
             type: 'inside',
@@ -1536,10 +1562,7 @@
             start: zoomStart,
             end: zoomEnd,
             bottom: 5,
-            borderColor: tc.splitLine,
-            fillerColor: isDark ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.1)',
-            handleStyle: { color: tc.axisLine },
-            textStyle: { color: tc.text },
+            ...zoomSliderStyle(tc),
           },
           {
             type: 'inside',

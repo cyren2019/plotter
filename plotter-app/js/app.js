@@ -39,7 +39,9 @@
       return debounced;
     }
     // ===================== Version Check =====================
-    const CURRENT_VERSION = 'v1.2.4';
+    // Single source of truth for the app version. index.html must not hardcode it —
+    // the badge text is rendered from here so it never flashes a stale version.
+    const CURRENT_VERSION = 'v1.2.5';
     let latestVersion = null; // set when a newer version is found
 
     function compareVersions(a, b) {
@@ -71,6 +73,8 @@
       updateVersionBadges();
     }
 
+    // Render badges from local state. Idempotent — safe to call at startup,
+    // after the network check, and after a language switch.
     function updateVersionBadges() {
       const releasesUrl = 'https://github.com/cyren2019/plotter/releases';
       const badges = document.querySelectorAll('.version-badge');
@@ -78,9 +82,7 @@
         if (latestVersion) {
           badge.classList.add('has-update');
           badge.title = t('new_version', { v: latestVersion });
-          if (!badge.textContent.includes('→')) {
-            badge.textContent = `${CURRENT_VERSION} → ${latestVersion}`;
-          }
+          badge.textContent = `${CURRENT_VERSION} → ${latestVersion}`;
           badge.onclick = () => window.open(releasesUrl, '_blank');
         } else {
           badge.classList.remove('has-update');
@@ -110,6 +112,7 @@
     const langToggle = document.getElementById('langToggle');
     langToggle.addEventListener('click', () => {
       setLanguage(currentLang === 'zh' ? 'en' : 'zh');
+      updateVersionBadges();
     });
 
     // ===================== Error Handling =====================
@@ -217,5 +220,6 @@
     window.addEventListener('resize', debouncedResize);
 
     // Kick off version check
+    updateVersionBadges();
     checkVersion();
     updateStaticTexts();
